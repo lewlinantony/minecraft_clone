@@ -1,0 +1,56 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+	  {
+		"label": "CMake: Configure",
+		"type": "shell",
+		"command": "cmake",
+		"args": [
+		  "-B", "build",
+		  "-S", "."
+		],
+		"options": {
+		  "cwd": "${workspaceFolder}"
+		},
+		"group": "build"
+	  },
+	  {
+		"label": "CMake: Build",
+		"type": "shell",
+		"command": "cmake",
+		"args": [
+		  "--build", "build"
+		],
+		"options": {
+		  "cwd": "${workspaceFolder}"
+		},
+		"group": {
+		  "kind": "build",
+		  "isDefault": true
+		},
+		"dependsOn": ["CMake: Configure"]
+	  },
+	  {
+		"label": "CMake: Clean",
+		"type": "shell",
+		"command": "rm",
+		"args": [
+		  "-rf", "build"
+		],
+		"problemMatcher": [],
+		"group": "build"
+	  },
+	  {
+		"label": "Run Minecraft Clone (no debug)",
+		"type": "shell",
+		"command": "${workspaceFolder}/build/minecraft_clone",
+		"group": "test",
+		"presentation": {
+		  "echo": true,
+		  "reveal": "always",
+		  "focus": false,
+		  "panel": "shared"
+		}
+	  }
+	]
+  }

@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+      "*.tcc": "cpp",
+      "*.hpp": "cpp",
+      "*.h": "cpp",
+      "*.cpp": "cpp"
+    },
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+    "C_Cpp.intelliSenseEngine": "default"
+  }

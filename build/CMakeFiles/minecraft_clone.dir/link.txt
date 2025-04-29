@@ -1,0 +1,1 @@
+/usr/bin/c++ -g -arch arm64 -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/minecraft_clone.dir/src/main.cpp.o -o minecraft_clone  -Wl,-rpath,/opt/homebrew/lib libglad.a libstb_image.a libimgui.a /opt/homebrew/lib/libglfw.3.4.dylib -framework OpenGL -framework OpenGL
