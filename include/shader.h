@@ -41,8 +41,9 @@ class Shader
                 // convert stream into string
                 vertexCode   = vShaderStream.str();
                 fragmentCode = fShaderStream.str();
-                std::cout << "Vertex shader content:\n" << vertexCode << std::endl;
-                std::cout << "Fragment shader content:\n" << fragmentCode << std::endl;                
+                
+                //std::cout << "Vertex shader content:\n" << vertexCode << std::endl;
+                //std::cout << "Fragment shader content:\n" << fragmentCode << std::endl;                
             }
             catch (std::ifstream::failure& e)
             {

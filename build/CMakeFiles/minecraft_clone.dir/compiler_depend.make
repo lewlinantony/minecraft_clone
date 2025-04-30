@@ -818,6 +818,7 @@ CMakeFiles/minecraft_clone.dir/src/main.cpp.o: /Users/lewlinantony/Projects/mine
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/stdint.h \
   /Users/lewlinantony/Projects/minecraft_clone/extern/glad/include/glad/KHR/khrplatform.h \
   /Users/lewlinantony/Projects/minecraft_clone/extern/glad/include/glad/glad.h \
+  /Users/lewlinantony/Projects/minecraft_clone/extern/stb/stb_image.h \
   /Users/lewlinantony/Projects/minecraft_clone/include/shader.h \
   /opt/homebrew/include/GLFW/glfw3.h
 
@@ -825,6 +826,8 @@ CMakeFiles/minecraft_clone.dir/src/main.cpp.o: /Users/lewlinantony/Projects/mine
 /opt/homebrew/include/GLFW/glfw3.h:
 
 /Users/lewlinantony/Projects/minecraft_clone/include/shader.h:
+
+/Users/lewlinantony/Projects/minecraft_clone/extern/stb/stb_image.h:
 
 /Library/Developer/CommandLineTools/usr/lib/clang/17/include/stddef.h:
 
