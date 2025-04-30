@@ -1,6 +1,0 @@
-/Users/lewlinantony/Projects/minecraft_clone/build/CMakeFiles/minecraft_clone.dir
-/Users/lewlinantony/Projects/minecraft_clone/build/CMakeFiles/glad.dir
-/Users/lewlinantony/Projects/minecraft_clone/build/CMakeFiles/stb_image.dir
-/Users/lewlinantony/Projects/minecraft_clone/build/CMakeFiles/imgui.dir
-/Users/lewlinantony/Projects/minecraft_clone/build/CMakeFiles/edit_cache.dir
-/Users/lewlinantony/Projects/minecraft_clone/build/CMakeFiles/rebuild_cache.dir
