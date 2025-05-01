@@ -56,17 +56,72 @@ int main(){
 
     // Set up vertex data
     float vertices[] = {
-        //cords                 colors              textureUV
-        -0.5f, -0.5f, 0.0f,     1.0f, 0.0f, 0.0f,   0.0f, 0.0f,
-        -0.5f,  0.5f, 0.0f,     0.0f, 0.0f, 1.0f,   1.0f, 0.0f,
-         0.5f,  0.5f, 0.0f,     0.0f, 0.0f, 1.0f,   0.0f, 1.0f,
-         0.5f, -0.5f, 0.0f,     1.0f, 0.0f, 0.0f,   1.0f, 1.0f
+    //   cords                  textureUV
+         -0.5f, -0.5f, -0.5f,     0.0f, 0.0f, //top
+         -0.5f,  0.5f, -0.5f,     0.0f, 1.0f,
+          0.5f,  0.5f, -0.5f,     1.0f, 1.0f,
+         -0.5f, -0.5f, -0.5f,     0.0f, 0.0f,
+          0.5f, -0.5f, -0.5f,     1.0f, 0.0f,         
+          0.5f,  0.5f, -0.5f,     1.0f, 1.0f,
+
+         -0.5f, -0.5f, -0.5f,     0.0f, 0.0f, //right
+         -0.5f,  0.5f, -0.5f,     0.0f, 1.0f,
+         -0.5f,  0.5f,  0.5f,     1.0f, 1.0f,
+         -0.5f, -0.5f, -0.5f,     0.0f, 0.0f, 
+         -0.5f, -0.5f,  0.5f,     1.0f, 0.0f,
+         -0.5f,  0.5f,  0.5f,     1.0f, 1.0f,
+
+          0.5f, -0.5f, -0.5f,     0.0f, 0.0f, //left
+          0.5f,  0.5f, -0.5f,     0.0f, 1.0f,
+          0.5f,  0.5f,  0.5f,     1.0f, 1.0f,
+          0.5f, -0.5f, -0.5f,     0.0f, 0.0f, 
+          0.5f, -0.5f,  0.5f,     1.0f, 0.0f,
+          0.5f,  0.5f,  0.5f,     1.0f, 1.0f,
+
+
+         -0.5f, -0.5f, -0.5f,     0.0f, 0.0f, //front
+          0.5f, -0.5f, -0.5f,     1.0f, 0.0f,         
+          0.5f, -0.5f,  0.5f,     1.0f, 1.0f,         
+         -0.5f, -0.5f, -0.5f,     0.0f, 0.0f, 
+         -0.5f, -0.5f,  0.5f,     0.0f, 1.0f,
+          0.5f, -0.5f,  0.5f,     1.0f, 1.0f,         
+
+          0.5f,  0.5f, -0.5f,     0.0f, 0.0f, //back
+         -0.5f,  0.5f, -0.5f,     1.0f, 0.0f,         
+         -0.5f,  0.5f,  0.5f,     1.0f, 1.0f,         
+          0.5f,  0.5f, -0.5f,     0.0f, 0.0f, 
+          0.5f,  0.5f,  0.5f,     0.0f, 1.0f,
+         -0.5f,  0.5f,  0.5f,     1.0f, 1.0f,         
+
+
+         -0.5f, -0.5f,  0.5f,     0.0f, 0.0f,//bottom
+         -0.5f,  0.5f,  0.5f,     0.0f, 1.0f,
+          0.5f,  0.5f,  0.5f,     1.0f, 1.0f, 
+         -0.5f, -0.5f,  0.5f,     0.0f, 0.0f,
+          0.5f, -0.5f,  0.5f,     1.0f, 0.0f,         
+          0.5f,  0.5f,  0.5f,     1.0f, 1.0f,         
+        
     };
 
-    unsigned int indices[] = {
-        0, 1, 2,
-        0, 2, 3
-    };      
+    // unsigned int indices[] = {
+    //     0, 1, 2,
+    //     0, 3, 2,
+
+    //     0, 1, 5,
+    //     0, 4, 5,
+
+    //     0, 3, 7,
+    //     0, 4, 7,
+
+    //     3, 2, 6,
+    //     3, 7, 6,
+
+    //     1, 2, 6, 
+    //     1, 5, 6,
+
+    //     4, 7, 6, 
+    //     4, 5, 6
+    // };      
 
     // Create and compile shaders
     Shader shader("shaders/shader.vert", "shaders/shader.frag");
@@ -75,27 +130,23 @@ int main(){
     unsigned int VBO, VAO, EBO;
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
-    glGenBuffers(1, &EBO);
+    // glGenBuffers(1, &EBO);
 
     glBindVertexArray(VAO); 
 
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);    
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW); 
+    // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);    
+    // glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW); 
 
     // Position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
-    
-    // Color attribute
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
 
     // texture coord attribute
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
-    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
 
     // Set drawing mode
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -150,7 +201,7 @@ int main(){
         processInput(window);
 
         // Clear the screen
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         // Use shader
@@ -160,8 +211,9 @@ int main(){
         glBindTexture(GL_TEXTURE_2D, text1);        
 
         glm::mat4 model = glm::mat4(1.0f);
+        // model = glm::translate(model, glm::vec3(sinf((float)glfwGetTime()), cosf((float)glfwGetTime()), 0.0f));
         model = glm::rotate(model, glm::radians(40.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-        model = glm::rotate(model, 10 * glm::radians((float)glfwGetTime()), glm::vec3(0.0, 0.0, 1.0));
+        model = glm::rotate(model, 20 * glm::radians((float)glfwGetTime()), glm::vec3(1.0, 1.0, 1.0));
         shader.setMat4("model", model);
 
         glm::mat4 view = glm::mat4(1.0f);
@@ -175,7 +227,8 @@ int main(){
         glBindVertexArray(VAO);
 
         // Draw triangle
-        glDrawElements(GL_TRIANGLES, sizeof(indices)/sizeof(indices[0]), GL_UNSIGNED_INT, 0);
+        // glDrawElements(GL_TRIANGLES, sizeof(indices)/sizeof(indices[0]), GL_UNSIGNED_INT, 0);
+        glDrawArrays(GL_TRIANGLES,0,sizeof(vertices)/sizeof(float));
 
         // Swap buffers and poll events
         glfwSwapBuffers(window);
