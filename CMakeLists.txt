@@ -11,14 +11,6 @@ set(CMAKE_OSX_ARCHITECTURES "arm64")
 find_package(OpenGL REQUIRED)
 find_package(glfw3 REQUIRED)
 
-# For GLM, we'll include it directly instead of using find_package
-# Check if GLM_INCLUDE_DIR is provided, otherwise use the default path
-if(NOT DEFINED GLM_INCLUDE_DIR)
-    # Default to external directory
-    set(GLM_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/extern/glm)
-    message(STATUS "GLM_INCLUDE_DIR not specified, using default: ${GLM_INCLUDE_DIR}")
-endif()
-
 # Source files
 set(SOURCE_FILES
     src/main.cpp
@@ -66,9 +58,7 @@ target_link_libraries(imgui PUBLIC
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/extern/glad/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/extern/stb
-    ${CMAKE_CURRENT_SOURCE_DIR}/extern/imgui
-    ${GLM_INCLUDE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/extern
 )
 
 # Link libraries

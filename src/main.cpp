@@ -2,7 +2,13 @@
 #include <GLFW/glfw3.h>
 #include <iostream>
 #include "shader.h"
-#include <stb_image.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <stb/stb_image.h>
+
+int SCREEN_WIDTH = 800;
+int SCREEN_HEIGHT = 600;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
@@ -27,7 +33,7 @@ int main(){
     #endif
 
     // Create a window
-    GLFWwindow* window = glfwCreateWindow(800, 600, "OpenGL Triangle", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "OpenGL Triangle", NULL, NULL);
     if(window == NULL){
         std::cout << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
@@ -112,7 +118,7 @@ int main(){
     // load image, create texture and generate mipmaps
     int widthImg, heightImg, nrChannels;
     stbi_set_flip_vertically_on_load(true);
-    unsigned char *data1 = stbi_load("assets/img/block.jpg", &widthImg, &heightImg, &nrChannels, 0);
+    unsigned char *data1 = stbi_load("assets/img/tessaract.png", &widthImg, &heightImg, &nrChannels, 0);
 
     GLenum format;
     if (nrChannels == 1)
@@ -152,6 +158,18 @@ int main(){
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, text1);        
+
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::rotate(model, glm::radians(40.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+        model = glm::rotate(model, 10 * glm::radians((float)glfwGetTime()), glm::vec3(0.0, 0.0, 1.0));
+        shader.setMat4("model", model);
+
+        glm::mat4 view = glm::mat4(1.0f);
+        view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
+        shader.setMat4("view", view);
+
+        glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)SCREEN_WIDTH/SCREEN_HEIGHT, 0.1f, 100.0f);
+        shader.setMat4("projection", projection);
 
         // Bind VAO
         glBindVertexArray(VAO);
