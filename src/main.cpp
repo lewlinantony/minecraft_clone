@@ -151,6 +151,7 @@ int main(){
     // Set drawing mode
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     glEnable(GL_BLEND);
+    glEnable(GL_DEPTH_TEST);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 
@@ -202,7 +203,7 @@ int main(){
 
         // Clear the screen
         glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // Use shader
         shader.use();
@@ -210,14 +211,10 @@ int main(){
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, text1);        
 
-        glm::mat4 model = glm::mat4(1.0f);
-        // model = glm::translate(model, glm::vec3(sinf((float)glfwGetTime()), cosf((float)glfwGetTime()), 0.0f));
-        model = glm::rotate(model, glm::radians(40.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-        model = glm::rotate(model, 20 * glm::radians((float)glfwGetTime()), glm::vec3(1.0, 1.0, 1.0));
-        shader.setMat4("model", model);
+
 
         glm::mat4 view = glm::mat4(1.0f);
-        view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
+        view = glm::translate(view, glm::vec3(0.0f, 0.0f, -10.0f));
         shader.setMat4("view", view);
 
         glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)SCREEN_WIDTH/SCREEN_HEIGHT, 0.1f, 100.0f);
@@ -227,8 +224,15 @@ int main(){
         glBindVertexArray(VAO);
 
         // Draw triangle
-        // glDrawElements(GL_TRIANGLES, sizeof(indices)/sizeof(indices[0]), GL_UNSIGNED_INT, 0);
-        glDrawArrays(GL_TRIANGLES,0,sizeof(vertices)/sizeof(float));
+        for(unsigned int i = 0; i<3; i++){
+            for(unsigned int j = 0; j<3; j++){
+                glm::mat4 model = glm::mat4(1.0f);
+                model = glm::translate(model, glm::vec3((float)j - 1.0f, (float)i - 1.0f, 0.0f));
+                model = glm::rotate(model, (float)glfwGetTime(), glm::vec3(1.0f, 1.0f, 1.0f));
+                shader.setMat4("model", model);
+                glDrawArrays(GL_TRIANGLES,0,sizeof(vertices)/sizeof(float));
+            }
+        }
 
         // Swap buffers and poll events
         glfwSwapBuffers(window);
