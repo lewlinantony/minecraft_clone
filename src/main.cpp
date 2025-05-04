@@ -10,15 +10,94 @@
 int SCREEN_WIDTH = 800;
 int SCREEN_HEIGHT = 600;
 
+glm::vec3 cameraPos   = glm::vec3(0.0f, 0.0f,  10.0f);
+glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+glm::vec3 cameraUp    = glm::vec3(0.0f, 1.0f,  0.0f);
+glm::vec3 cameraRight;
+
+float cameraSpeed = 10.0f;
+float deltaTime = 0.0f; // Time between current frame and last frame
+float lastFrame = 0.0f; // Time of last frame
+float lastX = SCREEN_WIDTH/2;
+float lastY = SCREEN_HEIGHT/2;
+float yaw = -90.0f;
+float pitch = 0.0f;
+
+
+bool firstMouse = true;
+
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
     glViewport(0, 0, width, height);
 } 
 
+void mouse_callback(GLFWwindow* window, double xpos, double ypos){
+    if(firstMouse){
+        lastX = xpos;
+        lastY = ypos;
+        firstMouse = false;
+    }
+
+    float xoffset = xpos - lastX;
+    float yoffset = lastY - ypos;
+    lastX = xpos;
+    lastY = ypos;
+
+    float sensitivity = 0.1f;
+    xoffset *= sensitivity;
+    yoffset *= sensitivity;
+
+    yaw += xoffset;
+    pitch += yoffset;
+
+    if(pitch > 89.0f)
+        pitch = 89.0f;
+    if(pitch < -89.0f)
+        pitch = -89.0f;
+        
+    glm::vec3 direction;
+    direction.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+    direction.y = sin(glm::radians(pitch));
+    direction.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+
+    cameraFront = glm::normalize(direction);
+}
+
 void processInput(GLFWwindow* window){
+
+    float speed = cameraSpeed * deltaTime;
+
+    //close window
     if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS){
         glfwSetWindowShouldClose(window, true);
     }
+
+    //camera controls
+
+    //in out
+    if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS){
+        cameraPos += cameraFront * speed;
+    }
+    if(glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS){
+        cameraPos -= cameraFront * speed;
+    }
+
+    //left right
+    cameraRight = glm::normalize(glm::cross(cameraFront, cameraUp));
+    if(glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS){
+        cameraPos += cameraRight * speed;
+    }    
+    if(glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS){
+        cameraPos -= cameraRight * speed;
+    }        
+
+    //up down
+    if(glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS){
+        cameraPos += cameraUp * speed;
+    }    
+    if(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS){
+        cameraPos -= cameraUp * speed;
+    }        
 }
 
 int main(){
@@ -53,6 +132,11 @@ int main(){
     glfwGetFramebufferSize(window, &width, &height);
     glViewport(0, 0, width, height);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    glfwSetCursorPosCallback(window, mouse_callback);
+
+
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
 
     // Set up vertex data
     float vertices[] = {
@@ -94,34 +178,14 @@ int main(){
          -0.5f,  0.5f,  0.5f,     1.0f, 1.0f,         
 
 
-         -0.5f, -0.5f,  0.5f,     0.0f, 0.0f,//bottom
+         -0.5f, -0.5f,  0.5f,     0.0f, 0.0f, //bottom
          -0.5f,  0.5f,  0.5f,     0.0f, 1.0f,
           0.5f,  0.5f,  0.5f,     1.0f, 1.0f, 
          -0.5f, -0.5f,  0.5f,     0.0f, 0.0f,
           0.5f, -0.5f,  0.5f,     1.0f, 0.0f,         
           0.5f,  0.5f,  0.5f,     1.0f, 1.0f,         
         
-    };
-
-    // unsigned int indices[] = {
-    //     0, 1, 2,
-    //     0, 3, 2,
-
-    //     0, 1, 5,
-    //     0, 4, 5,
-
-    //     0, 3, 7,
-    //     0, 4, 7,
-
-    //     3, 2, 6,
-    //     3, 7, 6,
-
-    //     1, 2, 6, 
-    //     1, 5, 6,
-
-    //     4, 7, 6, 
-    //     4, 5, 6
-    // };      
+    };   
 
     // Create and compile shaders
     Shader shader("shaders/shader.vert", "shaders/shader.frag");
@@ -136,9 +200,6 @@ int main(){
 
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-    // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);    
-    // glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW); 
 
     // Position attribute
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
@@ -198,6 +259,10 @@ int main(){
     // Main render loop
     while(!glfwWindowShouldClose(window))
     {
+        float currentFrame = glfwGetTime();
+        deltaTime = currentFrame - lastFrame;
+        lastFrame = currentFrame;
+        
         // Input processing
         processInput(window);
 
@@ -211,10 +276,7 @@ int main(){
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, text1);        
 
-
-
-        glm::mat4 view = glm::mat4(1.0f);
-        view = glm::translate(view, glm::vec3(0.0f, 0.0f, -10.0f));
+        glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp); // in vectors, dir = target - pos | target = pos + dir
         shader.setMat4("view", view);
 
         glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)SCREEN_WIDTH/SCREEN_HEIGHT, 0.1f, 100.0f);
@@ -223,7 +285,7 @@ int main(){
         // Bind VAO
         glBindVertexArray(VAO);
 
-        // Draw triangle
+        // Draw 
         for(unsigned int i = 0; i<3; i++){
             for(unsigned int j = 0; j<3; j++){
                 glm::mat4 model = glm::mat4(1.0f);
