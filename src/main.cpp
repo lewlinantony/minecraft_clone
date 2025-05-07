@@ -9,6 +9,7 @@
 
 int SCREEN_WIDTH = 800;
 int SCREEN_HEIGHT = 600;
+int blockType;
 
 glm::vec3 cameraPos   = glm::vec3(0.0f, 0.0f,  10.0f);
 glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
@@ -138,54 +139,62 @@ int main(){
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
 
-    // Set up vertex data
-    float vertices[] = {
-    //   cords                  textureUV
-         -0.5f, -0.5f, -0.5f,     0.0f, 0.0f, //top
-         -0.5f,  0.5f, -0.5f,     0.0f, 1.0f,
-          0.5f,  0.5f, -0.5f,     1.0f, 1.0f,
-         -0.5f, -0.5f, -0.5f,     0.0f, 0.0f,
-          0.5f, -0.5f, -0.5f,     1.0f, 0.0f,         
-          0.5f,  0.5f, -0.5f,     1.0f, 1.0f,
+    /* Set up vertex data
+        Umin, Umin
+        Umin, Umax
+        Umax, Umin
+        Umax, Umax
+    */
+   float vertices[] = {
 
-         -0.5f, -0.5f, -0.5f,     0.0f, 0.0f, //right
-         -0.5f,  0.5f, -0.5f,     0.0f, 1.0f,
-         -0.5f,  0.5f,  0.5f,     1.0f, 1.0f,
-         -0.5f, -0.5f, -0.5f,     0.0f, 0.0f, 
-         -0.5f, -0.5f,  0.5f,     1.0f, 0.0f,
-         -0.5f,  0.5f,  0.5f,     1.0f, 1.0f,
+        // Top face (+Y) → faceID = 0
+         0.5f,  0.5f, -0.5f,  0.0f, 0.0f, 0.0f,
+        -0.5f,  0.5f, -0.5f,  1.0f, 0.0f, 0.0f,
+        -0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 0.0f,
+         0.5f,  0.5f, -0.5f,  0.0f, 0.0f, 0.0f,
+         0.5f,  0.5f,  0.5f,  0.0f, 1.0f, 0.0f,
+        -0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 0.0f,    
 
-          0.5f, -0.5f, -0.5f,     0.0f, 0.0f, //left
-          0.5f,  0.5f, -0.5f,     0.0f, 1.0f,
-          0.5f,  0.5f,  0.5f,     1.0f, 1.0f,
-          0.5f, -0.5f, -0.5f,     0.0f, 0.0f, 
-          0.5f, -0.5f,  0.5f,     1.0f, 0.0f,
-          0.5f,  0.5f,  0.5f,     1.0f, 1.0f,
+        // Front face (+Y) → faceID = 0
+        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 1.0f,
+        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 1.0f,
+         0.5f,  0.5f, -0.5f,  1.0f, 1.0f, 1.0f,
+        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 1.0f,
+         0.5f, -0.5f, -0.5f,  1.0f, 0.0f, 1.0f,
+         0.5f,  0.5f, -0.5f,  1.0f, 1.0f, 1.0f,
 
+        // Right face (–X) → faceID = 1
+        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 2.0f,
+        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 2.0f,
+        -0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 2.0f,
+        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 2.0f,
+        -0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 2.0f,
+        -0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 2.0f,
 
-         -0.5f, -0.5f, -0.5f,     0.0f, 0.0f, //front
-          0.5f, -0.5f, -0.5f,     1.0f, 0.0f,         
-          0.5f, -0.5f,  0.5f,     1.0f, 1.0f,         
-         -0.5f, -0.5f, -0.5f,     0.0f, 0.0f, 
-         -0.5f, -0.5f,  0.5f,     0.0f, 1.0f,
-          0.5f, -0.5f,  0.5f,     1.0f, 1.0f,         
+        // Bottom face (+Z) → faceID = 5
+        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 3.0f,
+        -0.5f,  0.5f,  0.5f,  0.0f, 1.0f, 3.0f,
+         0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 3.0f,
+        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 3.0f,
+         0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 3.0f,
+         0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 3.0f,        
 
-          0.5f,  0.5f, -0.5f,     0.0f, 0.0f, //back
-         -0.5f,  0.5f, -0.5f,     1.0f, 0.0f,         
-         -0.5f,  0.5f,  0.5f,     1.0f, 1.0f,         
-          0.5f,  0.5f, -0.5f,     0.0f, 0.0f, 
-          0.5f,  0.5f,  0.5f,     0.0f, 1.0f,
-         -0.5f,  0.5f,  0.5f,     1.0f, 1.0f,         
+        // Left face (+X) → faceID = 2
+         0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 4.0f,
+         0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 4.0f,
+         0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 4.0f,
+         0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 4.0f,
+         0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 4.0f,
+         0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 4.0f,
 
-
-         -0.5f, -0.5f,  0.5f,     0.0f, 0.0f, //bottom
-         -0.5f,  0.5f,  0.5f,     0.0f, 1.0f,
-          0.5f,  0.5f,  0.5f,     1.0f, 1.0f, 
-         -0.5f, -0.5f,  0.5f,     0.0f, 0.0f,
-          0.5f, -0.5f,  0.5f,     1.0f, 0.0f,         
-          0.5f,  0.5f,  0.5f,     1.0f, 1.0f,         
-        
-    };   
+        // Bottom face (–Y) → faceID = 3
+        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 5.0f,
+         0.5f, -0.5f, -0.5f,  1.0f, 0.0f, 5.0f,
+         0.5f, -0.5f,  0.5f,  1.0f, 1.0f, 5.0f,
+        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 5.0f,
+        -0.5f, -0.5f,  0.5f,  0.0f, 1.0f, 5.0f,
+         0.5f, -0.5f,  0.5f,  1.0f, 1.0f, 5.0f,         
+    };
 
     // Create and compile shaders
     Shader shader("shaders/shader.vert", "shaders/shader.frag");
@@ -202,12 +211,15 @@ int main(){
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
     // Position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
     // texture coord attribute
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
+
+    glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(5 * sizeof(float)));
+    glEnableVertexAttribArray(2);    
 
     // Set drawing mode
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -231,7 +243,7 @@ int main(){
     // load image, create texture and generate mipmaps
     int widthImg, heightImg, nrChannels;
     stbi_set_flip_vertically_on_load(true);
-    unsigned char *data1 = stbi_load("assets/img/tessaract.png", &widthImg, &heightImg, &nrChannels, 0);
+    unsigned char *data1 = stbi_load("assets/img/minecraft_texture_map.png", &widthImg, &heightImg, &nrChannels, 0);
 
     GLenum format;
     if (nrChannels == 1)
@@ -242,19 +254,19 @@ int main(){
         format = GL_RGBA;
     
     if (data1) {
-        std::cout<<"yes texture1"<<std::endl;
+        std::cout<<"yes texture"<<std::endl;
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glTexImage2D(GL_TEXTURE_2D, 0, format, widthImg, heightImg, 0, format, GL_UNSIGNED_BYTE, data1);
         glGenerateMipmap(GL_TEXTURE_2D);
     }
     else{
-        std::cout<<"no texture1";
+        std::cout<<"no texture";
     }
     
     stbi_image_free(data1);
 
     shader.use();
-    shader.setInt("texture1", 0);
+    shader.setInt("text", 0);
 
     // Main render loop
     while(!glfwWindowShouldClose(window))
@@ -286,13 +298,24 @@ int main(){
         glBindVertexArray(VAO);
 
         // Draw 
-        for(unsigned int i = 0; i<3; i++){
-            for(unsigned int j = 0; j<3; j++){
-                glm::mat4 model = glm::mat4(1.0f);
-                model = glm::translate(model, glm::vec3((float)j - 1.0f, (float)i - 1.0f, 0.0f));
-                model = glm::rotate(model, (float)glfwGetTime(), glm::vec3(1.0f, 1.0f, 1.0f));
-                shader.setMat4("model", model);
-                glDrawArrays(GL_TRIANGLES,0,sizeof(vertices)/sizeof(float));
+        for(unsigned int x = 0; x<3; x++){
+            for(unsigned int y = 0; y<3; y++){
+                for(unsigned int z = 0; z<3; z++){
+                    glm::mat4 model = glm::mat4(1.0f);
+                    model = glm::translate(model, glm::vec3((float)z - 1.0f, (float)y - 1.0f , (float)x - 1.0f));
+                    shader.setMat4("model", model);
+                    if (y==2){
+                        blockType = 0;
+                    }
+                    else if (y==1){
+                        blockType = 1;
+                    }
+                    else {
+                        blockType = 2;
+                    }
+                    shader.setInt("blockType", blockType);
+                    glDrawArrays(GL_TRIANGLES,0,sizeof(vertices)/sizeof(float));
+                }
             }
         }
 
