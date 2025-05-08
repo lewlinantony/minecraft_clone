@@ -237,8 +237,8 @@ int main(){
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT); // y axis
      
     // set texture filtering parameters
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     // load image, create texture and generate mipmaps
     int widthImg, heightImg, nrChannels;
@@ -297,7 +297,7 @@ int main(){
         // Bind VAO
         glBindVertexArray(VAO);
 
-        // Draw 
+        // Draw f
         for(unsigned int x = 0; x<3; x++){
             for(unsigned int y = 0; y<3; y++){
                 for(unsigned int z = 0; z<3; z++){

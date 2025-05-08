@@ -33,18 +33,31 @@ void main()
         atlasPos = vec2(3.0f, 0.0f);
     }    
 
-    // we are working with normalised values here
+    // we are working with normalised values here    
     vec2 uvMin = atlasPos / texPerRow;
     vec2 uvMax = (atlasPos + vec2(1.0, 1.0)) / texPerRow;
     vec2 uv = mix(uvMin, uvMax, TexCoord);    
 
     vec4 texColor = texture(text, uv);
+
+    float borderWidth = 0.003; // Controls how wide the border is (0.01-0.05 works well)
+    float borderDarkness = 0.3f;    
+
+    // Calculate distance from texture edge
+    float distFromEdgeX = min(TexCoord.x, 1.0 - TexCoord.x); //Calculate distance from border
+    float distFromEdgeY = min(TexCoord.y, 1.0 - TexCoord.y);
+    float distFromEdge = min(distFromEdgeX, distFromEdgeY);
+    
+    // Create a darkening factor that increases near edges
+    float borderFactor = 1.0;
+    if (distFromEdge < borderWidth) { // if inside the set border width
+        // Smoothly transition from border darkness to normal color
+        borderFactor = mix(borderDarkness, 1.0, distFromEdge/borderWidth); // linearly interpolate it with distFromEdge/borderWidth as the scale that determines how darked it is
+    }
+    
+    // Apply the border darkening
+    texColor.rgb *= borderFactor;
+
     FragColor = texColor;
 }
 
-/*
-	•	uMin = 32x / 512
-	•	uMax = 32(x+1) / 512
-	•	vMin = 32y / 512
-	•	vMax = 32(y+1) / 512
-*/
