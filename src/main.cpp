@@ -11,11 +11,16 @@ int SCREEN_WIDTH = 800;
 int SCREEN_HEIGHT = 600;
 int blockType;
 
-glm::vec3 cameraPos   = glm::vec3(0.0f, 0.0f,  10.0f);
+glm::vec3 cameraPos   = glm::vec3(0.0f, 1.0f,  0.0f);
 glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 glm::vec3 cameraUp    = glm::vec3(0.0f, 1.0f,  0.0f);
 glm::vec3 cameraRight;
+glm::vec3 playerPosition = glm::vec3(0.0f, 1.0f, 0.0f);
 
+float gravity = 30.0f;
+float velocity = 0.0f;
+float jumpVelocity = 8.0f;
+float onAirScale = 1.0f;
 float cameraSpeed = 10.0f;
 float deltaTime = 0.0f; // Time between current frame and last frame
 float lastFrame = 0.0f; // Time of last frame
@@ -23,9 +28,13 @@ float lastX = SCREEN_WIDTH/2;
 float lastY = SCREEN_HEIGHT/2;
 float yaw = -90.0f;
 float pitch = 0.0f;
-
+float eyeHeight = 1.6f;
 
 bool firstMouse = true;
+bool onGround = false;
+bool spaceWasPressed = false;
+bool spaceIsPressed = false;
+
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
@@ -74,31 +83,53 @@ void processInput(GLFWwindow* window){
     }
 
     //camera controls
+    
+    glm::vec3 front = cameraFront;
+    front.y = 0.0f;
+    front = glm::normalize(front);
+    glm::vec3 right = glm::normalize(glm::cross(front, cameraUp));
+
+
+    if (onGround){
+        onAirScale = 1.0f;
+    }
+    else{
+        onAirScale = 0.5f;
+    }
 
     //in out
     if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS){
-        cameraPos += cameraFront * speed;
+        playerPosition += front * speed * onAirScale;
     }
     if(glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS){
-        cameraPos -= cameraFront * speed;
+        playerPosition -= front * speed * onAirScale;
     }
 
-    //left right
-    cameraRight = glm::normalize(glm::cross(cameraFront, cameraUp));
+    //left right    
     if(glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS){
-        cameraPos += cameraRight * speed;
+        playerPosition += right * speed * onAirScale;
     }    
     if(glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS){
-        cameraPos -= cameraRight * speed;
+        playerPosition -= right * speed * onAirScale;
     }        
 
     //up down
-    if(glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS){
-        cameraPos += cameraUp * speed;
-    }    
-    if(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS){
-        cameraPos -= cameraUp * speed;
-    }        
+    // if(glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS){
+    //     cameraPos += cameraUp * speed;
+    // }    
+    // if(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS){
+    //     cameraPos -= cameraUp * speed;
+    // }      
+    
+    
+    //jump
+    spaceIsPressed = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
+    if( spaceIsPressed && !spaceWasPressed && onGround){
+        velocity += jumpVelocity;
+        onGround = false;
+    }
+
+    spaceWasPressed = spaceIsPressed;
 }
 
 int main(){
@@ -275,8 +306,23 @@ int main(){
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
         
+        cameraPos = playerPosition + glm::vec3(0.0f, eyeHeight, 0.0f);
+
         // Input processing
         processInput(window);
+
+        velocity -= gravity * deltaTime;
+
+        playerPosition.y += velocity * deltaTime;
+
+        if (playerPosition.y < 1.0f) { // on ground 
+            playerPosition.y = 1.0f;
+            velocity = 0.0f;
+            onGround = true;
+        } 
+        else {
+            onGround = false;
+        }
 
         // Clear the screen
         glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -287,6 +333,7 @@ int main(){
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, text1);        
+    
 
         glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp); // in vectors, dir = target - pos | target = pos + dir
         shader.setMat4("view", view);
@@ -294,25 +341,26 @@ int main(){
         glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)SCREEN_WIDTH/SCREEN_HEIGHT, 0.1f, 100.0f);
         shader.setMat4("projection", projection);
 
+
         // Bind VAO
         glBindVertexArray(VAO);
 
         // Draw f
-        for(unsigned int x = 0; x<3; x++){
-            for(unsigned int y = 0; y<3; y++){
-                for(unsigned int z = 0; z<3; z++){
+        for(unsigned int x = 0; x<5; x++){
+            for(unsigned int y = 0; y<1; y++){
+                for(unsigned int z = 0; z<5; z++){
                     glm::mat4 model = glm::mat4(1.0f);
-                    model = glm::translate(model, glm::vec3((float)z - 1.0f, (float)y - 1.0f , (float)x - 1.0f));
+                    model = glm::translate(model, glm::vec3((float)z - 2.5f, (float)y , (float)x - 2.5f));
                     shader.setMat4("model", model);
-                    if (y==2){
+                    if (y==8){
                         blockType = 0;
                     }
-                    else if (y==1){
-                        blockType = 1;
-                    }
-                    else {
-                        blockType = 2;
-                    }
+                    // else if (y>=6){
+                    //     blockType = 1;
+                    // }
+                    // else {
+                    //     blockType = 2;
+                    // }
                     shader.setInt("blockType", blockType);
                     glDrawArrays(GL_TRIANGLES,0,sizeof(vertices)/sizeof(float));
                 }
