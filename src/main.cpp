@@ -6,6 +6,10 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <stb/stb_image.h>
+#include <unordered_map>
+#include <functional> // For std::hash
+
+
 
 int SCREEN_WIDTH = 800;
 int SCREEN_HEIGHT = 600;
@@ -15,7 +19,7 @@ glm::vec3 cameraPos   = glm::vec3(0.0f, 1.0f,  0.0f);
 glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 glm::vec3 cameraUp    = glm::vec3(0.0f, 1.0f,  0.0f);
 glm::vec3 cameraRight;
-glm::vec3 playerPosition = glm::vec3(0.0f, 1.0f, 0.0f);
+glm::vec3 playerPosition = glm::vec3(0.0f, 10.0f, 0.0f);
 
 float gravity = 30.0f;
 float velocity = 0.0f;
@@ -28,12 +32,29 @@ float lastX = SCREEN_WIDTH/2;
 float lastY = SCREEN_HEIGHT/2;
 float yaw = -90.0f;
 float pitch = 0.0f;
-float eyeHeight = 1.6f;
+float eyeHeight = 2.0f;
 
 bool firstMouse = true;
 bool onGround = false;
 bool spaceWasPressed = false;
 bool spaceIsPressed = false;
+
+namespace std {
+    template<>
+    struct hash<glm::ivec3> {
+        std::size_t operator()(const glm::ivec3& v) const noexcept {
+
+            std::size_t hx = std::hash<int>()(v.x);
+            std::size_t hy = std::hash<int>()(v.y);
+            std::size_t hz = std::hash<int>()(v.z);
+            
+            return hx ^ (hy << 1) ^ (hz << 2);
+        }
+    };
+}
+
+std::unordered_map<glm::ivec3, bool> blockMap;
+
 
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
@@ -113,7 +134,7 @@ void processInput(GLFWwindow* window){
         playerPosition -= right * speed * onAirScale;
     }        
 
-    //up down
+    // up down
     // if(glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS){
     //     cameraPos += cameraUp * speed;
     // }    
@@ -122,13 +143,13 @@ void processInput(GLFWwindow* window){
     // }      
     
     
-    //jump
+    // jump
     spaceIsPressed = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
     if( spaceIsPressed && !spaceWasPressed && onGround){
+        std::cout<<"\n Incremented \n"<<std::endl;      
         velocity += jumpVelocity;
         onGround = false;
     }
-
     spaceWasPressed = spaceIsPressed;
 }
 
@@ -166,16 +187,9 @@ int main(){
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
 
-
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
 
-    /* Set up vertex data
-        Umin, Umin
-        Umin, Umax
-        Umax, Umin
-        Umax, Umax
-    */
    float vertices[] = {
 
         // Top face (+Y) → faceID = 0
@@ -226,6 +240,21 @@ int main(){
         -0.5f, -0.5f,  0.5f,  0.0f, 1.0f, 5.0f,
          0.5f, -0.5f,  0.5f,  1.0f, 1.0f, 5.0f,         
     };
+
+    for (unsigned int x = 0; x < 7; x++) {
+        for (unsigned int y = 0; y < 1; y++) {
+            for (unsigned int z = 0; z < 7; z++) {
+                glm::vec3 Pos((float)z - 3.0f, (float)y, (float)x - 3.0f);
+                glm::ivec3 key = glm::ivec3(glm::floor(Pos));
+                blockMap[key] = true;
+
+                std::cout << "Block at: (" 
+                        << key.x << ", " 
+                        << key.y << ", " 
+                        << key.z << ")" << std::endl;
+            }
+        }
+    }
 
     // Create and compile shaders
     Shader shader("shaders/shader.vert", "shaders/shader.frag");
@@ -311,18 +340,33 @@ int main(){
         // Input processing
         processInput(window);
 
-        velocity -= gravity * deltaTime;
+        glm::ivec3 below = glm::ivec3(glm::floor(playerPosition.x), glm::floor(playerPosition.y - 1.0f), glm::floor(playerPosition.z)); //not sure whether or not to add floor to y
 
-        playerPosition.y += velocity * deltaTime;
+        std::cout << "Player Position: (" 
+                << playerPosition.x << ", " 
+                << playerPosition.y << ", " 
+                << playerPosition.z << ") "
+                << "Below: (" 
+                << below.x << ", " 
+                << below.y << ", " 
+                << below.z << ")" << std::endl;
 
-        if (playerPosition.y < 1.0f) { // on ground 
-            playerPosition.y = 1.0f;
-            velocity = 0.0f;
-            onGround = true;
+        if (blockMap[below]) { // if below block is in blockMap      
+            if (velocity < 0.0f) { 
+                velocity = 0.0f;
+                // playerPosition.y = below.y + 0.1f;
+                onGround = true;
+            }
         } 
         else {
+            velocity -= gravity * deltaTime;
             onGround = false;
         }
+        
+        playerPosition.y += velocity * deltaTime;
+
+
+        std::cout<<"Velocity :"<<velocity<<std::endl;
 
         // Clear the screen
         glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -346,11 +390,12 @@ int main(){
         glBindVertexArray(VAO);
 
         // Draw f
-        for(unsigned int x = 0; x<5; x++){
+        for(unsigned int x = 0; x<6; x++){
             for(unsigned int y = 0; y<1; y++){
-                for(unsigned int z = 0; z<5; z++){
+                for(unsigned int z = 0; z<6; z++){
                     glm::mat4 model = glm::mat4(1.0f);
-                    model = glm::translate(model, glm::vec3((float)z - 2.5f, (float)y , (float)x - 2.5f));
+                    glm::vec3 Pos((float)z - 3.0f, (float)y, (float)x - 3.0f);
+                    model = glm::translate(model, glm::floor(Pos));
                     shader.setMat4("model", model);
                     if (y==8){
                         blockType = 0;
