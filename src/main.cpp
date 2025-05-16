@@ -14,12 +14,12 @@
 int SCREEN_WIDTH = 800;
 int SCREEN_HEIGHT = 600;
 int blockType;
+int flag = 0;
 
-glm::vec3 cameraPos   = glm::vec3(0.0f, 1.0f,  0.0f);
-glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
-glm::vec3 cameraUp    = glm::vec3(0.0f, 1.0f,  0.0f);
-glm::vec3 cameraRight;
-glm::vec3 playerPosition = glm::vec3(0.0f, 10.0f, 0.0f);
+struct boundingBox{
+    glm::vec3 max;
+    glm::vec3 min;
+};
 
 float gravity = 30.0f;
 float velocity = 0.0f;
@@ -32,12 +32,25 @@ float lastX = SCREEN_WIDTH/2;
 float lastY = SCREEN_HEIGHT/2;
 float yaw = -90.0f;
 float pitch = 0.0f;
-float eyeHeight = 2.0f;
+float collisionGap = 0.1;
+
+float eyeHeight = 1.6f;
+float playerWidth = 0.6;
+float playerDepth = 0.6f;
+float playerHeight = 1.8;
 
 bool firstMouse = true;
 bool onGround = false;
 bool spaceWasPressed = false;
 bool spaceIsPressed = false;
+
+glm::vec3 playerPosition    = glm::vec3(0.0f, 10.0f, 0.0f);
+glm::vec3 cameraPos         = playerPosition + glm::vec3(0.0f, eyeHeight, 0.0f);
+glm::vec3 cameraFront       = glm::vec3(0.0f, 0.0f, -1.0f);
+glm::vec3 cameraUp          = glm::vec3(0.0f, 1.0f,  0.0f);
+glm::vec3 cameraRight;
+
+boundingBox playerBox;
 
 namespace std {
     template<>
@@ -54,8 +67,6 @@ namespace std {
 }
 
 std::unordered_map<glm::ivec3, bool> blockMap;
-
-
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
@@ -337,36 +348,82 @@ int main(){
         
         cameraPos = playerPosition + glm::vec3(0.0f, eyeHeight, 0.0f);
 
+        playerBox.max.x = playerPosition.x + (playerWidth/2);
+        playerBox.max.y = playerPosition.y + playerHeight;
+        playerBox.max.z = playerPosition.z + (playerDepth/2);
+
+        playerBox.min.x = playerPosition.x - (playerWidth/2);
+        playerBox.min.y = playerPosition.y;
+        playerBox.min.z = playerPosition.z - (playerDepth/2);
+
         // Input processing
         processInput(window);
 
-        glm::ivec3 below = glm::ivec3(glm::floor(playerPosition.x), glm::floor(playerPosition.y - 1.0f), glm::floor(playerPosition.z)); //not sure whether or not to add floor to y
+        // glm::ivec3 below = glm::ivec3(glm::floor(playerPosition.x), glm::floor(playerPosition.y - collisionGap), glm::floor(playerPosition.z)); //not sure whether or not to add floor to y
 
-        std::cout << "Player Position: (" 
-                << playerPosition.x << ", " 
-                << playerPosition.y << ", " 
-                << playerPosition.z << ") "
-                << "Below: (" 
-                << below.x << ", " 
-                << below.y << ", " 
-                << below.z << ")" << std::endl;
+        // if (blockMap[below]) { // if below block is in blockMap      
+        //     if (velocity < 0.0f) { 
+        //         velocity = 0.0f;
+        //         onGround = true;
+        //     }
+        // } 
+        // else {
+        //     velocity -= gravity * deltaTime;
+        //     onGround = false;
+        // }
 
-        if (blockMap[below]) { // if below block is in blockMap      
-            if (velocity < 0.0f) { 
-                velocity = 0.0f;
-                // playerPosition.y = below.y + 0.1f;
-                onGround = true;
+        float max_x = glm::ceil(playerPosition.x + (playerWidth/2));
+        float max_y = glm::ceil(playerPosition.y + playerHeight);
+        float max_z = glm::ceil(playerPosition.z + (playerDepth/2));
+
+        float min_x = glm::floor(playerPosition.x - (playerWidth/2));
+        float min_y = glm::floor(playerPosition.y);
+        float min_z = glm::floor(playerPosition.z - (playerDepth/2));
+
+        std::cout << "Player Position: (" << playerPosition.x << ", " << playerPosition.y << ", " << playerPosition.z << ")\n";
+        std::cout << "Player Bounding Box Min: (" << playerBox.min.x << ", " << playerBox.min.y << ", " << playerBox.min.z << ")\n";
+        std::cout << "Player Bounding Box Max: (" << playerBox.max.x << ", " << playerBox.max.y << ", " << playerBox.max.z << ")\n";
+        std::cout<<"Velocity :"<<velocity<<std::endl;
+
+        flag = 0;
+
+        for(int x = min_x; x< max_x; x++){
+            for(int y = min_y; y< max_y; y++){
+                for(int z = min_z; z< max_z; z++){
+                    std::cout<<"x:"<<x<<" y:"<<y<<" z:"<<z<<std::endl;
+                    if (blockMap[glm::ivec3(x,y,z)]){
+                        std::cout<<"yes "<<std::endl;
+                        boundingBox blockBox;
+                        blockBox.max = glm::vec3(x + 0.5f, y + 0.5f, z + 0.5f);
+                        blockBox.min = glm::vec3(x - 0.5f, y - 0.5f, z - 0.5f);
+                        if ((playerBox.min.x < blockBox.max.x && playerBox.min.x > blockBox.min.x) and
+                            (playerBox.min.y < blockBox.max.y && playerBox.min.y > blockBox.min.y) and
+                            (playerBox.min.z < blockBox.max.z && playerBox.min.z > blockBox.min.z)){
+                            std::cout << "Colliding Block Position: (" << x << ", " << y << ", " << z << ")\n";
+                            std::cout << "Block Bounding Box Min: (" << blockBox.min.x << ", " << blockBox.min.y << ", " << blockBox.min.z << ")\n";
+                            std::cout << "Block Bounding Box Max: (" << blockBox.max.x << ", " << blockBox.max.y << ", " << blockBox.max.z << ")\n";
+                            if (velocity < 0.0f) { 
+                                velocity = 0.0f;
+                                onGround = true;
+                            }                  
+                            flag = 1;
+                                     
+                        }
+                    }
+                    
+                }
             }
-        } 
-        else {
+        }
+        if (flag==0){
             velocity -= gravity * deltaTime;
             onGround = false;
         }
+
+
         
         playerPosition.y += velocity * deltaTime;
 
 
-        std::cout<<"Velocity :"<<velocity<<std::endl;
 
         // Clear the screen
         glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -389,7 +446,7 @@ int main(){
         // Bind VAO
         glBindVertexArray(VAO);
 
-        // Draw f
+        // Draw 
         for(unsigned int x = 0; x<6; x++){
             for(unsigned int y = 0; y<1; y++){
                 for(unsigned int z = 0; z<6; z++){
