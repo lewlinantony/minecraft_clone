@@ -22,7 +22,7 @@ struct boundingBox{
 
 float gravity = 30.0f;
 float velocity = 0.0f;
-float jumpVelocity = 8.0f;
+float jumpVelocity = 9.0f;
 float onAirScale = 1.0f;
 float cameraSpeed = 10.0f;
 float deltaTime = 0.0f; // Time between current frame and last frame
@@ -36,6 +36,7 @@ float eyeHeight = 1.6f;
 float playerWidth = 0.6;
 float playerDepth = 0.6f;
 float playerHeight = 1.8;
+float margin = 0.5f;
 
 bool firstMouse = true;
 bool onGround = false;
@@ -173,21 +174,20 @@ bool boxesOverlap(boundingBox playerBox, boundingBox blockBox){
 void resolveYCollision(glm::vec3& p_nextPlayerPosition){
         nextPlayerBox.max.x = p_nextPlayerPosition.x + (playerWidth/2);
         nextPlayerBox.max.y = p_nextPlayerPosition.y + playerHeight;
-        nextPlayerBox.max.z = p_nextPlayerPosition.z + (playerDepth/2); 
+        nextPlayerBox.max.z = p_nextPlayerPosition.z + (playerDepth/2);
 
         nextPlayerBox.min.x = p_nextPlayerPosition.x - (playerWidth/2);
         nextPlayerBox.min.y = p_nextPlayerPosition.y;
         nextPlayerBox.min.z = p_nextPlayerPosition.z - (playerDepth/2);
 
 
-        //calculate the range of blocks to check for collision
-        float max_x = glm::ceil(p_nextPlayerPosition.x + (playerWidth/2));
-        float max_y = glm::ceil(p_nextPlayerPosition.y + playerHeight);
-        float max_z = glm::ceil(p_nextPlayerPosition.z + (playerDepth/2));
+        float max_x = glm::ceil(nextPlayerBox.max.x + margin);
+        float max_y = glm::ceil(nextPlayerBox.max.y + margin);
+        float max_z = glm::ceil(nextPlayerBox.max.z + margin);
 
-        float min_x = glm::floor(p_nextPlayerPosition.x - (playerWidth/2));
-        float min_y = glm::floor(p_nextPlayerPosition.y);
-        float min_z = glm::floor(p_nextPlayerPosition.z - (playerDepth/2));
+        float min_x = glm::floor(nextPlayerBox.min.x - margin);
+        float min_y = glm::floor(nextPlayerBox.min.y - margin);
+        float min_z = glm::floor(nextPlayerBox.min.z - margin);
 
         float minPenYPos = FLT_MAX, minPenYNeg = FLT_MAX;
         
@@ -244,14 +244,22 @@ void resolveXCollision(glm::vec3& p_nextPlayerPosition){
         nextPlayerBox.min.z = p_nextPlayerPosition.z - (playerDepth/2);
 
 
+        float max_x = glm::ceil(nextPlayerBox.max.x + margin);
+        float max_y = glm::ceil(nextPlayerBox.max.y + margin);
+        float max_z = glm::ceil(nextPlayerBox.max.z + margin);
 
-        float max_x = glm::ceil(p_nextPlayerPosition.x + (playerWidth/2));
-        float max_y = glm::ceil(p_nextPlayerPosition.y + playerHeight);
-        float max_z = glm::ceil(p_nextPlayerPosition.z + (playerDepth/2));
+        float min_x = glm::floor(nextPlayerBox.min.x - margin);
+        float min_y = glm::floor(nextPlayerBox.min.y - margin);
+        float min_z = glm::floor(nextPlayerBox.min.z - margin);
 
-        float min_x = glm::floor(p_nextPlayerPosition.x - (playerWidth/2));
-        float min_y = glm::floor(p_nextPlayerPosition.y);
-        float min_z = glm::floor(p_nextPlayerPosition.z - (playerDepth/2));
+        std::cout<<"Next Player position: "<<p_nextPlayerPosition.x<<" "<<p_nextPlayerPosition.y<<" "<<p_nextPlayerPosition.z<<std::endl;
+        std::cout<<"Maximum X: "<<max_x<<std::endl;
+        std::cout<<"Minimum X: "<<min_x<<std::endl;
+        std::cout<<"Maximum Y: "<<max_y<<std::endl;
+        std::cout<<"Minimum Y: "<<min_y<<std::endl;
+        std::cout<<"Maximum Z: "<<max_z<<std::endl;
+        std::cout<<"Minimum Z: "<<min_z<<std::endl;
+
 
         float minPenXPos = FLT_MAX, minPenXNeg = FLT_MAX;
         
@@ -264,8 +272,8 @@ void resolveXCollision(glm::vec3& p_nextPlayerPosition){
                 for(float z = min_z; z< max_z; z++){
                     if (blockMap[glm::ivec3(x,y,z)]){
                         boundingBox blockBox;
-                        blockBox.max = glm::vec3(x + 0.5f + gap, y + 0.5f, z + 0.5f);
-                        blockBox.min = glm::vec3(x - 0.5f - gap, y - 0.5f, z - 0.5f);
+                        blockBox.max = glm::vec3(x + 0.5f , y + 0.5f, z + 0.5f);
+                        blockBox.min = glm::vec3(x - 0.5f , y - 0.5f, z - 0.5f);
                         if (boxesOverlap(nextPlayerBox, blockBox)){
                                 count++;
                                 minPenXNeg = std::min(minPenXNeg, std::max(0.0f, blockBox.max.x - nextPlayerBox.min.x));
@@ -283,7 +291,7 @@ void resolveXCollision(glm::vec3& p_nextPlayerPosition){
             std::cout<<"XCollision count :"<<count<<std::endl;
             std::cout<<"Current Next Player Pos:"<<p_nextPlayerPosition.x<<" "<<p_nextPlayerPosition.y<<" "<<p_nextPlayerPosition.z<<std::endl;
             if(minPenXNeg<minPenXPos){
-                p_nextPlayerPosition.x += minPenXNeg;       
+                p_nextPlayerPosition.x += minPenXNeg; // the updated player poistion will be the block position + (playerwidth/2) so dont overthink that
             }
             else{
                 p_nextPlayerPosition.x -= minPenXPos;
@@ -298,12 +306,38 @@ void resolveXCollision(glm::vec3& p_nextPlayerPosition){
         std::cout<<"\n";
         
 }
+glm::vec3 resolveZCollision(glm::vec3 p_nextPlayerPosition){
+        nextPlayerBox.max.x = p_nextPlayerPosition.x + (playerWidth/2);
+        nextPlayerBox.max.y = p_nextPlayerPosition.y + playerHeight;
+        nextPlayerBox.max.z = p_nextPlayerPosition.z + (playerDepth/2);
+
+        nextPlayerBox.min.x = p_nextPlayerPosition.x - (playerWidth/2);
+        nextPlayerBox.min.y = p_nextPlayerPosition.y;
+        nextPlayerBox.min.z = p_nextPlayerPosition.z - (playerDepth/2);
+
+        //calculate the range of blocks to check for collision
+        float max_x = glm::ceil(p_nextPlayerPosition.x + (playerWidth/2));
+        float max_y = glm::ceil(p_nextPlayerPosition.y + playerHeight);
+        float max_z = glm::ceil(p_nextPlayerPosition.z + (playerDepth/2));
+
+        float min_x = glm::floor(p_nextPlayerPosition.x - (playerWidth/2));
+        float min_y = glm::floor(p_nextPlayerPosition.y);
+        float min_z = glm::floor(p_nextPlayerPosition.z - (playerDepth/2));
+
+        return p_nextPlayerPosition;    
+}
+
 
 glm::vec3 resolveCollision(glm::vec3 p_nextPlayerPosition){
 
-        resolveYCollision(p_nextPlayerPosition);
+    
+    resolveYCollision(p_nextPlayerPosition);
+    
+    resolveXCollision(p_nextPlayerPosition);
 
-        resolveXCollision(p_nextPlayerPosition);
+
+        
+
          
 
         return p_nextPlayerPosition;    
@@ -578,6 +612,5 @@ int main(){
 
 
 /*
-* investigate why the x axis collision happens at the 0.8s rather than 0.5s
 * the idea of using booleans(maybe for each direction of the axis) to limit collision like onGround variable for y axis
 */
