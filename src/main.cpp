@@ -234,7 +234,7 @@ void resolveYCollision(glm::vec3& p_nextPlayerPosition){
         std::cout<<"\n";
 }
 
-void resolveXCollision(glm::vec3& p_nextPlayerPosition){
+void resolveXZCollision(glm::vec3& p_nextPlayerPosition){
         nextPlayerBox.max.x = p_nextPlayerPosition.x + (playerWidth/2);
         nextPlayerBox.max.y = p_nextPlayerPosition.y + playerHeight;
         nextPlayerBox.max.z = p_nextPlayerPosition.z + (playerDepth/2);
@@ -262,6 +262,7 @@ void resolveXCollision(glm::vec3& p_nextPlayerPosition){
 
 
         float minPenXPos = FLT_MAX, minPenXNeg = FLT_MAX;
+        float minPenZPos = FLT_MAX, minPenZNeg = FLT_MAX;
         
 
         XCollision = false;
@@ -272,16 +273,19 @@ void resolveXCollision(glm::vec3& p_nextPlayerPosition){
                 for(float z = min_z; z< max_z; z++){
                     if (blockMap[glm::ivec3(x,y,z)]){
                         boundingBox blockBox;
-                        blockBox.max = glm::vec3(x + 0.5f , y + 0.5f, z + 0.5f);
-                        blockBox.min = glm::vec3(x - 0.5f , y - 0.5f, z - 0.5f);
+                        blockBox.max = glm::vec3(x + 0.5f + gap, y + 0.5f, z + 0.5f + gap); //adding gap to remove wierd teleportation effect
+                        blockBox.min = glm::vec3(x - 0.5f - gap, y - 0.5f, z - 0.5f - gap);
                         if (boxesOverlap(nextPlayerBox, blockBox)){
                                 count++;
                                 minPenXNeg = std::min(minPenXNeg, std::max(0.0f, blockBox.max.x - nextPlayerBox.min.x));
                                 minPenXPos = std::min(minPenXPos, std::max(0.0f, nextPlayerBox.max.x - blockBox.min.x)); 
+                                
+                                minPenZNeg = std::min(minPenZNeg, std::max(0.0f, blockBox.max.z - nextPlayerBox.min.z));
+                                minPenZPos = std::min(minPenZPos, std::max(0.0f, nextPlayerBox.max.z - blockBox.min.z));
+
                                 XCollision = true;
                                 std::cout<<"XCollision detected"<<std::endl;
                                 std::cout<<"block position :"<<x<<" "<<y<<" "<<z<<std::endl;    
-                                std::cout << "minPenXNeg: " << minPenXNeg << ", minPenXPos: " << minPenXPos << std::endl;
                         }                        
                     }
                 }
@@ -289,14 +293,21 @@ void resolveXCollision(glm::vec3& p_nextPlayerPosition){
         }
         if(XCollision){
             std::cout<<"XCollision count :"<<count<<std::endl;
-            std::cout<<"Current Next Player Pos:"<<p_nextPlayerPosition.x<<" "<<p_nextPlayerPosition.y<<" "<<p_nextPlayerPosition.z<<std::endl;
-            if(minPenXNeg<minPenXPos){
-                p_nextPlayerPosition.x += minPenXNeg; // the updated player poistion will be the block position + (playerwidth/2) so dont overthink that
-            }
-            else{
+            // std::cout<<"Current Next Player Pos:"<<p_nextPlayerPosition.x<<" "<<p_nextPlayerPosition.y<<" "<<p_nextPlayerPosition.z<<std::endl;
+
+            float minPen = std::min({minPenXNeg, minPenXPos, minPenZNeg, minPenZPos});
+            if (minPen == minPenXNeg) {
+                p_nextPlayerPosition.x += minPenXNeg;
+            } else if (minPen == minPenXPos) {
                 p_nextPlayerPosition.x -= minPenXPos;
+            } else if (minPen == minPenZNeg) {
+                p_nextPlayerPosition.z += minPenZNeg;
+            } else if (minPen == minPenZPos) {
+                p_nextPlayerPosition.z -= minPenZPos;
             }
-            std::cout<<"Updated Next Player Pos:"<<p_nextPlayerPosition.x<<" "<<p_nextPlayerPosition.y<<" "<<p_nextPlayerPosition.z<<std::endl;
+            std::cout<< "minPenXNeg: " << minPenXNeg << ", minPenXPos: " << minPenXPos << std::endl;
+            std::cout<< "minPenZNeg: " << minPenZNeg << ", minPenZPos: " << minPenZPos << std::endl;
+            // std::cout<<"Updated Next Player Pos:"<<p_nextPlayerPosition.x<<" "<<p_nextPlayerPosition.y<<" "<<p_nextPlayerPosition.z<<std::endl;
 
         } 
         else{
@@ -306,41 +317,14 @@ void resolveXCollision(glm::vec3& p_nextPlayerPosition){
         std::cout<<"\n";
         
 }
-glm::vec3 resolveZCollision(glm::vec3 p_nextPlayerPosition){
-        nextPlayerBox.max.x = p_nextPlayerPosition.x + (playerWidth/2);
-        nextPlayerBox.max.y = p_nextPlayerPosition.y + playerHeight;
-        nextPlayerBox.max.z = p_nextPlayerPosition.z + (playerDepth/2);
-
-        nextPlayerBox.min.x = p_nextPlayerPosition.x - (playerWidth/2);
-        nextPlayerBox.min.y = p_nextPlayerPosition.y;
-        nextPlayerBox.min.z = p_nextPlayerPosition.z - (playerDepth/2);
-
-        //calculate the range of blocks to check for collision
-        float max_x = glm::ceil(p_nextPlayerPosition.x + (playerWidth/2));
-        float max_y = glm::ceil(p_nextPlayerPosition.y + playerHeight);
-        float max_z = glm::ceil(p_nextPlayerPosition.z + (playerDepth/2));
-
-        float min_x = glm::floor(p_nextPlayerPosition.x - (playerWidth/2));
-        float min_y = glm::floor(p_nextPlayerPosition.y);
-        float min_z = glm::floor(p_nextPlayerPosition.z - (playerDepth/2));
-
-        return p_nextPlayerPosition;    
-}
 
 
 glm::vec3 resolveCollision(glm::vec3 p_nextPlayerPosition){
-
     
-    resolveYCollision(p_nextPlayerPosition);
-    
-    resolveXCollision(p_nextPlayerPosition);
+    resolveYCollision(p_nextPlayerPosition);    
+    resolveXZCollision(p_nextPlayerPosition);     
 
-
-        
-
-         
-
-        return p_nextPlayerPosition;    
+    return p_nextPlayerPosition;    
 
 }
 
