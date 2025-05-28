@@ -10,50 +10,33 @@
 #include <functional> // For std::hash
 
 
+// Constants
+const int SCREEN_WIDTH = 800;
+const int SCREEN_HEIGHT = 600;
+const float BLOCK_SIZE = 1.0f; 
+const float COLLISION_THRESHOLD = 0.2;
 
-int SCREEN_WIDTH = 800;
-int SCREEN_HEIGHT = 600;
-int blockType;
+// Physics constants
+const float gravity = 30.0f;
+const float jumpVelocity = 9.0f;
+const float cameraSpeed = 10.0f;
+const float MOUSE_SENSITIVITY = 0.1f;
 
-struct boundingBox{
-    glm::vec3 max;
-    glm::vec3 min;
-};
-
-float gravity = 30.0f;
-float velocity = 0.0f;
-float jumpVelocity = 9.0f;
-float onAirScale = 1.0f;
-float cameraSpeed = 10.0f;
-float deltaTime = 0.0f; // Time between current frame and last frame
-float lastFrame = 0.0f; // Time of last frame
-float lastX = SCREEN_WIDTH/2;
-float lastY = SCREEN_HEIGHT/2;
-float yaw = -90.0f;
-float pitch = 0.0f;
-float gap = 0.01;
-float eyeHeight = 1.6f;
+// Player dimensions
 float playerWidth = 0.6;
 float playerDepth = 0.6f;
 float playerHeight = 1.8;
-float margin = 0.5f;
+float eyeHeight = 1.6f;
 
-bool firstMouse = true;
-bool onGround = false;
-bool spaceWasPressed = false;
-bool spaceIsPressed = false;
-bool YCollision = false;
-bool XCollision = false;
+// Player bounding box
+struct BoundingBox{
+    glm::vec3 max;
+    glm::vec3 min;
+};
+BoundingBox nextPlayerBox;
 
-glm::vec3 playerPosition    = glm::vec3(0.0f, 10.0f, 0.0f);
-glm::vec3 nextPlayerPosition;
-glm::vec3 cameraPos         = playerPosition + glm::vec3(0.0f, eyeHeight, 0.0f);
-glm::vec3 cameraFront       = glm::vec3(0.0f, 0.0f, -1.0f);
-glm::vec3 cameraUp          = glm::vec3(0.0f, 1.0f,  0.0f);
-glm::vec3 cameraRight;
 
-boundingBox nextPlayerBox;
-
+// Hash function for glm::ivec3 
 namespace std {
     template<>
     struct hash<glm::ivec3> {
@@ -67,8 +50,43 @@ namespace std {
         }
     };
 }
+std::unordered_map<glm::ivec3, bool> blockMap; // map to store blocks in the world
 
-std::unordered_map<glm::ivec3, bool> blockMap;
+// Player state
+float velocity = 0.0f;
+glm::vec3 playerPosition    = glm::vec3(0.0f, 10.0f, 0.0f);
+glm::vec3 nextPlayerPosition;
+bool onGround = false;
+
+
+// Camera state
+float yaw = -90.0f;
+float pitch = 0.0f;
+glm::vec3 cameraPos         = playerPosition + glm::vec3(0.0f, eyeHeight, 0.0f);
+glm::vec3 cameraFront       = glm::vec3(0.0f, 0.0f, -1.0f);
+glm::vec3 cameraUp          = glm::vec3(0.0f, 1.0f,  0.0f);
+glm::vec3 cameraRight;
+
+// Mouse state
+bool firstMouse = true;
+bool spaceWasPressed = false;
+bool spaceIsPressed = false;
+float lastX = SCREEN_WIDTH/2;
+float lastY = SCREEN_HEIGHT/2;
+float MOVE_SCALE = 0.1f; 
+
+// Frame timing
+float deltaTime = 0.0f; // Time between current frame and last frame
+float lastFrame = 0.0f; // Time of last frame
+
+//Uniforms
+int blockType;
+
+// Collision detection variables
+bool YCollision = false;
+bool XCollision = false;
+float gap = 0.01; // gap between player and block during to avoid collision issues
+float margin = 0.5f; // constant to grab blocks around the player for collision detection
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
@@ -87,9 +105,8 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos){
     lastX = xpos;
     lastY = ypos;
 
-    float sensitivity = 0.1f;
-    xoffset *= sensitivity;
-    yoffset *= sensitivity;
+    xoffset *= MOUSE_SENSITIVITY;
+    yoffset *= MOUSE_SENSITIVITY;
 
     yaw += xoffset;
     pitch += yoffset;
@@ -116,8 +133,7 @@ void processInput(GLFWwindow* window){
         glfwSetWindowShouldClose(window, true);
     }
 
-    //camera controls
-    
+    //camera controls    
     glm::vec3 front = cameraFront;
     front.y = 0.0f;
     front = glm::normalize(front);
@@ -125,47 +141,38 @@ void processInput(GLFWwindow* window){
 
 
     if (onGround){
-        onAirScale = 1.0f;
+        MOVE_SCALE = 1.0f;
     }
     else{
-        onAirScale = 0.5f;
+        MOVE_SCALE = 0.5f;
     }
 
     //in out
     if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS){
-        playerPosition += front * speed * onAirScale;
+        playerPosition += front * speed * MOVE_SCALE;
     }
     if(glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS){
-        playerPosition -= front * speed * onAirScale;
+        playerPosition -= front * speed * MOVE_SCALE;
     }
 
     //left right    
     if(glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS){
-        playerPosition += right * speed * onAirScale;
+        playerPosition += right * speed * MOVE_SCALE;
     }    
     if(glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS){
-        playerPosition -= right * speed * onAirScale;
+        playerPosition -= right * speed * MOVE_SCALE;
     }        
-
-    // up down
-    // if(glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS){
-    //     cameraPos += cameraUp * speed;
-    // }    
-    // if(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS){
-    //     cameraPos -= cameraUp * speed;
-    // }    
     
     // jump
     spaceIsPressed = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
-    if( spaceIsPressed && !spaceWasPressed && onGround){
-        std::cout<<"\n Jump \n"<<std::endl;      
+    if( spaceIsPressed && !spaceWasPressed && onGround){     
         velocity += jumpVelocity;
         onGround = false;
     }
     spaceWasPressed = spaceIsPressed;
 }
 
-bool boxesOverlap(boundingBox playerBox, boundingBox blockBox){
+bool boxesOverlap(BoundingBox playerBox, BoundingBox blockBox){
     return ((playerBox.min.x <= blockBox.max.x && playerBox.max.x >= blockBox.min.x) and
             (playerBox.min.y <= blockBox.max.y && playerBox.max.y >= blockBox.min.y) and
             (playerBox.min.z <= blockBox.max.z && playerBox.max.z >= blockBox.min.z));    
@@ -193,45 +200,36 @@ void resolveYCollision(glm::vec3& p_nextPlayerPosition){
         
 
         YCollision = false;
-        int count = 0;
-        std::cout<<"YCollision check..."<<std::endl;
         for(float x = min_x; x< max_x; x++){
             for(float y = min_y; y< max_y; y++){
                 for(float z = min_z; z< max_z; z++){
                     if (blockMap[glm::ivec3(x,y,z)]){
-                        boundingBox blockBox;
-                        blockBox.max = glm::vec3(x + 0.5f, y + 0.5f + gap, z + 0.5f); //add gap for now, remove later if not necessary
-                        blockBox.min = glm::vec3(x - 0.5f, y - 0.5f - gap, z - 0.5f);
+                        BoundingBox blockBox;
+                        blockBox.max = glm::vec3(x + BLOCK_SIZE/2, y + BLOCK_SIZE/2 + gap, z + BLOCK_SIZE/2); 
+                        blockBox.min = glm::vec3(x - BLOCK_SIZE/2, y - BLOCK_SIZE/2 - gap, z - BLOCK_SIZE/2);
                         if (boxesOverlap(nextPlayerBox, blockBox)){
-                                count++;
                                 minPenYNeg = std::min(minPenYNeg, blockBox.max.y - nextPlayerBox.min.y);        
                                 minPenYPos = std::min(minPenYPos, nextPlayerBox.max.y - blockBox.min.y); 
-                                YCollision = true;
-                                std::cout<<"YCollision detected"<<std::endl;
-                                std::cout<<"block position :"<<x<<" "<<y<<" "<<z<<std::endl;    
+                                YCollision = true;    
                         }                        
                     }
                 }
             }
         }
-        if(YCollision){
-            std::cout<<"YCollision count :"<<count<<std::endl;
-            std::cout<<"Current next player position? :"<<p_nextPlayerPosition.x<<" "<<p_nextPlayerPosition.y<<" "<<p_nextPlayerPosition.z<<std::endl;
+        if(YCollision && (minPenYNeg < COLLISION_THRESHOLD || minPenYPos < COLLISION_THRESHOLD)){          
+            velocity = 0.0f;
             if(minPenYNeg<minPenYPos){
                 p_nextPlayerPosition.y += minPenYNeg ;   
-                velocity = 0.0f;
                 onGround = true;         
             }
             else{
                 p_nextPlayerPosition.y -= minPenYPos ;
+                onGround = false;
             }
-            std::cout<<"Updated next player position? :"<<p_nextPlayerPosition.x<<" "<<p_nextPlayerPosition.y<<" "<<p_nextPlayerPosition.z<<std::endl;
         }
         else{
             onGround = false;
-            std::cout<<"no YCollision"<<std::endl;
         } 
-        std::cout<<"\n";
 }
 
 void resolveXZCollision(glm::vec3& p_nextPlayerPosition){
@@ -252,31 +250,19 @@ void resolveXZCollision(glm::vec3& p_nextPlayerPosition){
         float min_y = glm::floor(nextPlayerBox.min.y - margin);
         float min_z = glm::floor(nextPlayerBox.min.z - margin);
 
-        std::cout<<"Next Player position: "<<p_nextPlayerPosition.x<<" "<<p_nextPlayerPosition.y<<" "<<p_nextPlayerPosition.z<<std::endl;
-        std::cout<<"Maximum X: "<<max_x<<std::endl;
-        std::cout<<"Minimum X: "<<min_x<<std::endl;
-        std::cout<<"Maximum Y: "<<max_y<<std::endl;
-        std::cout<<"Minimum Y: "<<min_y<<std::endl;
-        std::cout<<"Maximum Z: "<<max_z<<std::endl;
-        std::cout<<"Minimum Z: "<<min_z<<std::endl;
-
-
         float minPenXPos = FLT_MAX, minPenXNeg = FLT_MAX;
         float minPenZPos = FLT_MAX, minPenZNeg = FLT_MAX;
         
 
         XCollision = false;
-        int count = 0;
-        std::cout<<"XCollision check..."<<std::endl;
         for(float x = min_x; x< max_x; x++){
             for(float y = min_y; y< max_y; y++){
                 for(float z = min_z; z< max_z; z++){
                     if (blockMap[glm::ivec3(x,y,z)]){
-                        boundingBox blockBox;
-                        blockBox.max = glm::vec3(x + 0.5f + gap, y + 0.5f, z + 0.5f + gap); //adding gap to remove wierd teleportation effect
-                        blockBox.min = glm::vec3(x - 0.5f - gap, y - 0.5f, z - 0.5f - gap);
+                        BoundingBox blockBox;
+                        blockBox.max = glm::vec3(x + BLOCK_SIZE/2 , y + BLOCK_SIZE/2, z + BLOCK_SIZE/2 ); //adding gap to remove wierd teleportation effect
+                        blockBox.min = glm::vec3(x - BLOCK_SIZE/2 , y - BLOCK_SIZE/2, z - BLOCK_SIZE/2 );
                         if (boxesOverlap(nextPlayerBox, blockBox)){
-                                count++;
                                 minPenXNeg = std::min(minPenXNeg, std::max(0.0f, blockBox.max.x - nextPlayerBox.min.x));
                                 minPenXPos = std::min(minPenXPos, std::max(0.0f, nextPlayerBox.max.x - blockBox.min.x)); 
                                 
@@ -284,17 +270,12 @@ void resolveXZCollision(glm::vec3& p_nextPlayerPosition){
                                 minPenZPos = std::min(minPenZPos, std::max(0.0f, nextPlayerBox.max.z - blockBox.min.z));
 
                                 XCollision = true;
-                                std::cout<<"XCollision detected"<<std::endl;
-                                std::cout<<"block position :"<<x<<" "<<y<<" "<<z<<std::endl;    
                         }                        
                     }
                 }
             }
         }
         if(XCollision){
-            std::cout<<"XCollision count :"<<count<<std::endl;
-            // std::cout<<"Current Next Player Pos:"<<p_nextPlayerPosition.x<<" "<<p_nextPlayerPosition.y<<" "<<p_nextPlayerPosition.z<<std::endl;
-
             float minPen = std::min({minPenXNeg, minPenXPos, minPenZNeg, minPenZPos});
             if (minPen == minPenXNeg) {
                 p_nextPlayerPosition.x += minPenXNeg;
@@ -305,16 +286,8 @@ void resolveXZCollision(glm::vec3& p_nextPlayerPosition){
             } else if (minPen == minPenZPos) {
                 p_nextPlayerPosition.z -= minPenZPos;
             }
-            std::cout<< "minPenXNeg: " << minPenXNeg << ", minPenXPos: " << minPenXPos << std::endl;
-            std::cout<< "minPenZNeg: " << minPenZNeg << ", minPenZPos: " << minPenZPos << std::endl;
-            // std::cout<<"Updated Next Player Pos:"<<p_nextPlayerPosition.x<<" "<<p_nextPlayerPosition.y<<" "<<p_nextPlayerPosition.z<<std::endl;
 
         } 
-        else{
-            std::cout<<"no XCollision"<<std::endl;
-        }   
-
-        std::cout<<"\n";
         
 }
 
@@ -429,7 +402,7 @@ int main(){
             }
         }
     }
-    blockMap[glm::ivec3(glm::floor(glm::vec3(0.0f, 1.0f, 0.0f)))] = true;
+    blockMap[glm::ivec3(glm::floor(glm::vec3(0.0f, 3.0f, 0.0f)))] = true; // testing only
 
     // Create and compile shaders
     Shader shader("shaders/shader.vert", "shaders/shader.frag");
@@ -522,7 +495,6 @@ int main(){
 
         playerPosition = resolveCollision(nextPlayerPosition);
         
-        // cameraPos = glm::vec3(playerPosition.x, -0.5f,playerPosition.z) + glm::vec3(0.0f, eyeHeight, 0.0f);   // test only
         cameraPos = playerPosition + glm::vec3(0.0f, eyeHeight, 0.0f);
 
 
@@ -572,7 +544,7 @@ int main(){
 
         //single block at center for testing
         glm::mat4 model = glm::mat4(1.0f);
-        glm::vec3 Pos(0.0f, 1.0f, 0.0f);
+        glm::vec3 Pos(0.0f, 3.0f, 0.0f);
         model = glm::translate(model, glm::floor(Pos));
         shader.setMat4("model", model);
         shader.setInt("blockType", blockType);
@@ -594,7 +566,3 @@ int main(){
     return 0;
 }
 
-
-/*
-* the idea of using booleans(maybe for each direction of the axis) to limit collision like onGround variable for y axis
-*/
