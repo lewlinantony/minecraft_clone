@@ -1,13 +1,15 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <iostream>
-#include "shader.h"
+#include "shader/shader.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <stb/stb_image.h>
 #include <unordered_map>
 #include <functional> // For std::hash
+#include <FastNoiseLite/FastNoiseLite.h> // noise  
+
 
 
 // Constants
@@ -15,6 +17,9 @@ const int SCREEN_WIDTH = 800;
 const int SCREEN_HEIGHT = 600;
 const float BLOCK_SIZE = 1.0f; 
 const float COLLISION_THRESHOLD = 0.2;
+
+// world constants
+const float terrainSize = 7.0f; //odd number please for symmetry
 
 // Physics constants
 const float gravity = 30.0f;
@@ -84,7 +89,7 @@ int blockType;
 
 // Collision detection variables
 bool YCollision = false;
-bool XCollision = false;
+bool XZCollision = false;
 float gap = 0.01; // gap between player and block during to avoid collision issues
 float margin = 0.5f; // constant to grab blocks around the player for collision detection
 
@@ -165,7 +170,8 @@ void processInput(GLFWwindow* window){
     
     // jump
     spaceIsPressed = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
-    if( spaceIsPressed && !spaceWasPressed && onGround){     
+    if( spaceIsPressed && !spaceWasPressed && onGround){
+        std::cout << "Jumping!" << std::endl;     
         velocity += jumpVelocity;
         onGround = false;
     }
@@ -216,15 +222,17 @@ void resolveYCollision(glm::vec3& p_nextPlayerPosition){
                 }
             }
         }
-        if(YCollision && (minPenYNeg < COLLISION_THRESHOLD || minPenYPos < COLLISION_THRESHOLD)){          
-            velocity = 0.0f;
-            if(minPenYNeg<minPenYPos){
-                p_nextPlayerPosition.y += minPenYNeg ;   
-                onGround = true;         
-            }
-            else{
-                p_nextPlayerPosition.y -= minPenYPos ;
-                onGround = false;
+        if(YCollision){
+            if ((minPenYNeg < FLT_MAX && minPenYPos < FLT_MAX) && (minPenYNeg < COLLISION_THRESHOLD || minPenYPos < COLLISION_THRESHOLD)) {
+                velocity = 0.0f;
+                if(minPenYNeg<minPenYPos){
+                    p_nextPlayerPosition.y += minPenYNeg ;   
+                    onGround = true;         
+                }
+                else{
+                    p_nextPlayerPosition.y -= minPenYPos ;
+                    onGround = false;
+                }
             }
         }
         else{
@@ -254,37 +262,57 @@ void resolveXZCollision(glm::vec3& p_nextPlayerPosition){
         float minPenZPos = FLT_MAX, minPenZNeg = FLT_MAX;
         
 
-        XCollision = false;
+        XZCollision = false;
+        int count = 0;
         for(float x = min_x; x< max_x; x++){
             for(float y = min_y; y< max_y; y++){
                 for(float z = min_z; z< max_z; z++){
                     if (blockMap[glm::ivec3(x,y,z)]){
                         BoundingBox blockBox;
-                        blockBox.max = glm::vec3(x + BLOCK_SIZE/2 , y + BLOCK_SIZE/2, z + BLOCK_SIZE/2 ); //adding gap to remove wierd teleportation effect
-                        blockBox.min = glm::vec3(x - BLOCK_SIZE/2 , y - BLOCK_SIZE/2, z - BLOCK_SIZE/2 );
+                        blockBox.max = glm::vec3(x + BLOCK_SIZE/2 + gap, y + BLOCK_SIZE/2, z + BLOCK_SIZE/2 + gap); // without this gap there is the teleportation issue for -x and -z not sure why but this fixes it
+                        blockBox.min = glm::vec3(x - BLOCK_SIZE/2 - gap, y - BLOCK_SIZE/2, z - BLOCK_SIZE/2 - gap);
                         if (boxesOverlap(nextPlayerBox, blockBox)){
+                                std::cout << "XZCollision with block at: (" 
+                                        << x << ", " 
+                                        << y << ", " 
+                                        << z << ")" << std::endl;
+                                count++;
                                 minPenXNeg = std::min(minPenXNeg, std::max(0.0f, blockBox.max.x - nextPlayerBox.min.x));
                                 minPenXPos = std::min(minPenXPos, std::max(0.0f, nextPlayerBox.max.x - blockBox.min.x)); 
                                 
                                 minPenZNeg = std::min(minPenZNeg, std::max(0.0f, blockBox.max.z - nextPlayerBox.min.z));
                                 minPenZPos = std::min(minPenZPos, std::max(0.0f, nextPlayerBox.max.z - blockBox.min.z));
 
-                                XCollision = true;
+                                XZCollision = true;
                         }                        
                     }
                 }
             }
         }
-        if(XCollision){
-            float minPen = std::min({minPenXNeg, minPenXPos, minPenZNeg, minPenZPos});
-            if (minPen == minPenXNeg) {
-                p_nextPlayerPosition.x += minPenXNeg;
-            } else if (minPen == minPenXPos) {
-                p_nextPlayerPosition.x -= minPenXPos;
-            } else if (minPen == minPenZNeg) {
-                p_nextPlayerPosition.z += minPenZNeg;
-            } else if (minPen == minPenZPos) {
-                p_nextPlayerPosition.z -= minPenZPos;
+
+        if(XZCollision){
+            std::cout << "minPenXNeg: " << minPenXNeg << std::endl;
+            std::cout << "minPenXPos: " << minPenXPos << std::endl;
+            std::cout << "minPenZNeg: " << minPenZNeg << std::endl;
+            std::cout << "minPenZPos: " << minPenZPos << std::endl;
+            std::cout << "XZCollision count: " << count << std::endl;
+            
+            // X axis
+            if (minPenXNeg < FLT_MAX && minPenXPos < FLT_MAX && (minPenXNeg < COLLISION_THRESHOLD || minPenXPos < COLLISION_THRESHOLD)) {
+                if (minPenXNeg < minPenXPos) {
+                    p_nextPlayerPosition.x += minPenXNeg;
+                } else {
+                    p_nextPlayerPosition.x -= minPenXPos;
+                }
+            }
+            
+            // Z axis
+            if (minPenZNeg < FLT_MAX && minPenZPos < FLT_MAX && (minPenZNeg < COLLISION_THRESHOLD || minPenZPos < COLLISION_THRESHOLD)) {
+                if (minPenZNeg < minPenZPos) {
+                    p_nextPlayerPosition.z += minPenZNeg;
+                } else {
+                    p_nextPlayerPosition.z -= minPenZPos;
+                }
             }
 
         } 
@@ -389,10 +417,18 @@ int main(){
          0.5f, -0.5f,  0.5f,  1.0f, 1.0f, 5.0f,         
     };
 
-    for (unsigned int x = 0; x < 7; x++) {
+
+    FastNoiseLite noise;
+    noise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
+    noise.SetSeed(1337);
+    noise.SetFrequency(0.05f);
+
+    
+    for (unsigned int x = 0; x < terrainSize; x++) {
         for (unsigned int y = 0; y < 1; y++) {
-            for (unsigned int z = 0; z < 7; z++) {
-                glm::vec3 Pos((float)z - 3.0f, (float)y, (float)x - 3.0f);
+            for (unsigned int z = 0; z < terrainSize; z++) {
+                if (x==3 && z==3) continue; 
+                glm::vec3 Pos((float)z - (terrainSize-1)/2.0f, (float)y, (float)x - (terrainSize-1)/2.0f);
                 glm::ivec3 key = glm::ivec3(glm::floor(Pos));
                 blockMap[key] = true;
                 std::cout << "Block at: (" 
@@ -402,7 +438,19 @@ int main(){
             }
         }
     }
-    blockMap[glm::ivec3(glm::floor(glm::vec3(0.0f, 3.0f, 0.0f)))] = true; // testing only
+
+    glm::vec3 Pos(0.0f, 1.0f, 0.0f);
+    glm::ivec3 key = glm::ivec3(glm::floor(Pos));
+    blockMap[key] = true;
+
+    glm::vec3 testBlockPos(1.0f, 1.0f, 1.0f);
+    glm::ivec3 testBlockKey = glm::ivec3(glm::floor(testBlockPos));
+    blockMap[testBlockKey] = true;
+
+    glm::vec3 testBlockPos2(2.0f, 1.0f, 2.0f);
+    glm::ivec3 testBlockKey2 = glm::ivec3(glm::floor(testBlockPos2));
+    blockMap[testBlockKey2] = true;
+
 
     // Create and compile shaders
     Shader shader("shaders/shader.vert", "shaders/shader.frag");
@@ -520,11 +568,16 @@ int main(){
         glBindVertexArray(VAO);
 
         // Draw 
-        for(unsigned int x = 0; x<7; x++){
+        for(unsigned int x = 0; x<terrainSize; x++){
             for(unsigned int y = 0; y<1; y++){
-                for(unsigned int z = 0; z<7; z++){
+                for(unsigned int z = 0; z<terrainSize; z++){
+                    if (x==3 && z==3) continue; 
+
                     glm::mat4 model = glm::mat4(1.0f);
-                    glm::vec3 Pos((float)z - 3.0f, (float)y, (float)x - 3.0f);
+
+                    float height = noise.GetNoise((float)x, (float)z); // scale and offset
+                    glm::vec3 Pos((float)z - (terrainSize-1)/2.0f, (float)y, (float)x - (terrainSize-1)/2.0f);
+                    
                     model = glm::translate(model, glm::floor(Pos));
                     shader.setMat4("model", model);
                     if (y==8){
@@ -542,14 +595,23 @@ int main(){
             }
         }
 
-        //single block at center for testing
         glm::mat4 model = glm::mat4(1.0f);
-        glm::vec3 Pos(0.0f, 3.0f, 0.0f);
+        glm::vec3 Pos(0.0f, 1.0f, 0.0f);
         model = glm::translate(model, glm::floor(Pos));
-        shader.setMat4("model", model);
-        shader.setInt("blockType", blockType);
+        shader.setMat4("model", model);        
         glDrawArrays(GL_TRIANGLES,0,sizeof(vertices)/sizeof(float));
 
+        glm::mat4 model2 = glm::mat4(1.0f);
+        glm::vec3 testBlockPos(1.0f, 1.0f, 1.0f);
+        model2 = glm::translate(model2, glm::floor(testBlockPos));
+        shader.setMat4("model", model2);
+        glDrawArrays(GL_TRIANGLES, 0, sizeof(vertices)/sizeof(float));
+
+        glm::mat4 model3 = glm::mat4(1.0f);
+        glm::vec3 testBlockPos2(2.0f, 1.0f, 2.0f);
+        model3 = glm::translate(model3, glm::floor(testBlockPos2));
+        shader.setMat4("model", model3);
+        glDrawArrays(GL_TRIANGLES, 0, sizeof(vertices)/sizeof(float));
 
 
         // Swap buffers and poll events
