@@ -9,6 +9,9 @@
 #include <unordered_map>
 #include <functional> // For std::hash
 #include <FastNoiseLite/FastNoiseLite.h> // noise  
+#include <imgui/imgui.h>
+#include <imgui/imgui_impl_glfw.h>
+#include <imgui/imgui_impl_opengl3.h>
 
 
 
@@ -19,7 +22,7 @@ const float BLOCK_SIZE = 1.0f;
 const float COLLISION_THRESHOLD = 0.2;
 
 // world constants
-const float terrainSize = 7.0f; //odd number please for symmetry
+const float terrainSize = 101.0f; //odd number please for symmetry
 
 // Physics constants
 const float gravity = 30.0f;
@@ -76,6 +79,8 @@ glm::vec3 cameraRight;
 bool firstMouse = true;
 bool spaceWasPressed = false;
 bool spaceIsPressed = false;
+bool tabWasPressed = false;
+bool tabIsPressed = false;
 float lastX = SCREEN_WIDTH/2;
 float lastY = SCREEN_HEIGHT/2;
 float MOVE_SCALE = 0.1f; 
@@ -151,6 +156,19 @@ void processInput(GLFWwindow* window){
     else{
         MOVE_SCALE = 0.5f;
     }
+    
+    tabIsPressed = glfwGetKey(window, GLFW_KEY_TAB) == GLFW_PRESS;
+    if (tabIsPressed && !tabWasPressed) {
+        int mode = glfwGetInputMode(window, GLFW_CURSOR);
+        if (mode == GLFW_CURSOR_DISABLED) {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            firstMouse = true; // reset mouse for next lock
+        } else {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+            firstMouse = true; // reset mouse for next lock
+        }
+    }
+    tabWasPressed = tabIsPressed;
 
     //in out
     if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS){
@@ -319,7 +337,6 @@ void resolveXZCollision(glm::vec3& p_nextPlayerPosition){
         
 }
 
-
 glm::vec3 resolveCollision(glm::vec3 p_nextPlayerPosition){
     
     resolveYCollision(p_nextPlayerPosition);    
@@ -362,9 +379,14 @@ int main(){
     glViewport(0, 0, width, height);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
-
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
+    // Initialize ImGui
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 330 core"); 
 
    float vertices[] = {
 
@@ -427,8 +449,8 @@ int main(){
     for (unsigned int x = 0; x < terrainSize; x++) {
         for (unsigned int y = 0; y < 1; y++) {
             for (unsigned int z = 0; z < terrainSize; z++) {
-                if (x==3 && z==3) continue; 
-                glm::vec3 Pos((float)z - (terrainSize-1)/2.0f, (float)y, (float)x - (terrainSize-1)/2.0f);
+                float height = noise.GetNoise((float)x, (float)z); 
+                glm::vec3 Pos((float)z - (terrainSize-1)/2.0f, height, (float)x - (terrainSize-1)/2.0f);
                 glm::ivec3 key = glm::ivec3(glm::floor(Pos));
                 blockMap[key] = true;
                 std::cout << "Block at: (" 
@@ -439,17 +461,6 @@ int main(){
         }
     }
 
-    glm::vec3 Pos(0.0f, 1.0f, 0.0f);
-    glm::ivec3 key = glm::ivec3(glm::floor(Pos));
-    blockMap[key] = true;
-
-    glm::vec3 testBlockPos(1.0f, 1.0f, 1.0f);
-    glm::ivec3 testBlockKey = glm::ivec3(glm::floor(testBlockPos));
-    blockMap[testBlockKey] = true;
-
-    glm::vec3 testBlockPos2(2.0f, 1.0f, 2.0f);
-    glm::ivec3 testBlockKey2 = glm::ivec3(glm::floor(testBlockPos2));
-    blockMap[testBlockKey2] = true;
 
 
     // Create and compile shaders
@@ -530,20 +541,40 @@ int main(){
         float currentFrame = glfwGetTime();
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
+
         
         // Input processing
         processInput(window);
-        
-        nextPlayerPosition = playerPosition;
 
+        // plater state update
+        nextPlayerPosition = playerPosition;
         if(!onGround) {
             velocity -= gravity * deltaTime;
         }
         nextPlayerPosition.y += (velocity * deltaTime);
-
         playerPosition = resolveCollision(nextPlayerPosition);
-        
+
+        // Update camera position
         cameraPos = playerPosition + glm::vec3(0.0f, eyeHeight, 0.0f);
+
+
+        //imgui stuff
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        ImGui::Begin("Debug Window");
+        ImGui::Text("Player Position: %.2f, %.2f, %.2f", playerPosition.x, playerPosition.y, playerPosition.z);
+        ImGui::Text("On Ground: %s", onGround ? "Yes" : "No");
+        ImGui::Text("Velocity: %.2f", velocity);
+        ImGui::Text("Y Collision: %s", YCollision ? "Yes" : "No");
+        ImGui::Text("XZ Collision: %s", XZCollision ? "Yes" : "No");
+        if (ImGui::Button("Reset Position")) {
+            playerPosition = glm::vec3(0.0f, 10.0f, 0.0f);
+            velocity = 0.0f;
+            onGround = false;
+        }
+        ImGui::End();                
 
 
         // Clear the screen
@@ -553,13 +584,12 @@ int main(){
         // Use shader
         shader.use();
 
+        // Set uniforms
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, text1);        
     
-
         glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp); // in vectors, dir = target - pos | target = pos + dir
         shader.setMat4("view", view);
-
         glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)SCREEN_WIDTH/SCREEN_HEIGHT, 0.1f, 100.0f);
         shader.setMat4("projection", projection);
 
@@ -571,12 +601,11 @@ int main(){
         for(unsigned int x = 0; x<terrainSize; x++){
             for(unsigned int y = 0; y<1; y++){
                 for(unsigned int z = 0; z<terrainSize; z++){
-                    if (x==3 && z==3) continue; 
 
                     glm::mat4 model = glm::mat4(1.0f);
 
                     float height = noise.GetNoise((float)x, (float)z); // scale and offset
-                    glm::vec3 Pos((float)z - (terrainSize-1)/2.0f, (float)y, (float)x - (terrainSize-1)/2.0f);
+                    glm::vec3 Pos((float)z - (terrainSize-1)/2.0f, height, (float)x - (terrainSize-1)/2.0f);
                     
                     model = glm::translate(model, glm::floor(Pos));
                     shader.setMat4("model", model);
@@ -594,24 +623,10 @@ int main(){
                 }
             }
         }
-
-        glm::mat4 model = glm::mat4(1.0f);
-        glm::vec3 Pos(0.0f, 1.0f, 0.0f);
-        model = glm::translate(model, glm::floor(Pos));
-        shader.setMat4("model", model);        
-        glDrawArrays(GL_TRIANGLES,0,sizeof(vertices)/sizeof(float));
-
-        glm::mat4 model2 = glm::mat4(1.0f);
-        glm::vec3 testBlockPos(1.0f, 1.0f, 1.0f);
-        model2 = glm::translate(model2, glm::floor(testBlockPos));
-        shader.setMat4("model", model2);
-        glDrawArrays(GL_TRIANGLES, 0, sizeof(vertices)/sizeof(float));
-
-        glm::mat4 model3 = glm::mat4(1.0f);
-        glm::vec3 testBlockPos2(2.0f, 1.0f, 2.0f);
-        model3 = glm::translate(model3, glm::floor(testBlockPos2));
-        shader.setMat4("model", model3);
-        glDrawArrays(GL_TRIANGLES, 0, sizeof(vertices)/sizeof(float));
+        
+        // Render ImGui
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
 
         // Swap buffers and poll events
@@ -623,6 +638,9 @@ int main(){
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
     glDeleteBuffers(1, &EBO);
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();    
     
     glfwTerminate();
     return 0;
