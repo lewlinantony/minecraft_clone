@@ -3,3 +3,4 @@ build/
 
 # MacOS system files
 .DS_Store
+imgui.ini

@@ -14,7 +14,6 @@
 #include <imgui/imgui_impl_opengl3.h>
 
 
-
 // Constants
 const int SCREEN_WIDTH = 800;
 const int SCREEN_HEIGHT = 600;
@@ -62,8 +61,7 @@ std::unordered_map<glm::ivec3, bool> blockMap; // map to store blocks in the wor
 
 // Player state
 float velocity = 0.0f;
-glm::vec3 playerPosition    = glm::vec3(0.0f, 10.0f, 0.0f);
-glm::vec3 nextPlayerPosition;
+glm::vec3 playerPosition    = glm::vec3(0.0f, 5.0f, 0.0f);
 bool onGround = false;
 
 
@@ -97,6 +95,13 @@ bool YCollision = false;
 bool XZCollision = false;
 float gap = 0.01; // gap between player and block during to avoid collision issues
 float margin = 0.5f; // constant to grab blocks around the player for collision detection
+// Global minPen variables for debugging
+float minPenYPos = FLT_MAX, minPenYNeg = FLT_MAX;
+float minPenXPos = FLT_MAX, minPenXNeg = FLT_MAX;
+float minPenZPos = FLT_MAX, minPenZNeg = FLT_MAX;
+// Store currently colliding blocks for debug
+std::vector<glm::ivec3> collidingBlocksY;
+std::vector<glm::ivec3> collidingBlocksXZ;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
@@ -220,8 +225,11 @@ void resolveYCollision(glm::vec3& p_nextPlayerPosition){
         float min_y = glm::floor(nextPlayerBox.min.y - margin);
         float min_z = glm::floor(nextPlayerBox.min.z - margin);
 
-        float minPenYPos = FLT_MAX, minPenYNeg = FLT_MAX;
-        
+        // Reset global minPenY values
+        minPenYPos = FLT_MAX;
+        minPenYNeg = FLT_MAX;
+        // Clear Y colliding blocks at the start of collision check
+        collidingBlocksY.clear();
 
         YCollision = false;
         for(float x = min_x; x< max_x; x++){
@@ -232,15 +240,32 @@ void resolveYCollision(glm::vec3& p_nextPlayerPosition){
                         blockBox.max = glm::vec3(x + BLOCK_SIZE/2, y + BLOCK_SIZE/2 + gap, z + BLOCK_SIZE/2); 
                         blockBox.min = glm::vec3(x - BLOCK_SIZE/2, y - BLOCK_SIZE/2 - gap, z - BLOCK_SIZE/2);
                         if (boxesOverlap(nextPlayerBox, blockBox)){
-                                minPenYNeg = std::min(minPenYNeg, blockBox.max.y - nextPlayerBox.min.y);        
-                                minPenYPos = std::min(minPenYPos, nextPlayerBox.max.y - blockBox.min.y); 
-                                YCollision = true;    
+                            minPenYNeg = std::min(minPenYNeg, blockBox.max.y - nextPlayerBox.min.y);        
+                            minPenYPos = std::min(minPenYPos, nextPlayerBox.max.y - blockBox.min.y); 
+                            YCollision = true;    
+                            // Add colliding block position for Y only if not already present
+                            glm::ivec3 blockPos(x, y, z);
+                            bool alreadyPresent = false;
+                            for (const auto& blk : collidingBlocksY) {
+                                if (blk == blockPos) {
+                                    alreadyPresent = true;
+                                    break;
+                                }
+                            }
+                            if (!alreadyPresent) {
+                                collidingBlocksY.push_back(blockPos);
+                            }
                         }                        
                     }
                 }
             }
         }
+
         if(YCollision){
+            std::cout << "Before Y collision resolution: (" 
+                    << p_nextPlayerPosition.x << ", " 
+                    << p_nextPlayerPosition.y << ", " 
+                    << p_nextPlayerPosition.z << ")" << std::endl;            
             if ((minPenYNeg < FLT_MAX && minPenYPos < FLT_MAX) && (minPenYNeg < COLLISION_THRESHOLD || minPenYPos < COLLISION_THRESHOLD)) {
                 velocity = 0.0f;
                 if(minPenYNeg<minPenYPos){
@@ -252,6 +277,10 @@ void resolveYCollision(glm::vec3& p_nextPlayerPosition){
                     onGround = false;
                 }
             }
+            std::cout << "Before Y collision resolution: (" 
+                    << p_nextPlayerPosition.x << ", " 
+                    << p_nextPlayerPosition.y << ", " 
+                    << p_nextPlayerPosition.z << ")" << std::endl;                        
         }
         else{
             onGround = false;
@@ -276,10 +305,13 @@ void resolveXZCollision(glm::vec3& p_nextPlayerPosition){
         float min_y = glm::floor(nextPlayerBox.min.y - margin);
         float min_z = glm::floor(nextPlayerBox.min.z - margin);
 
-        float minPenXPos = FLT_MAX, minPenXNeg = FLT_MAX;
-        float minPenZPos = FLT_MAX, minPenZNeg = FLT_MAX;
-        
-
+        // Reset global minPenXZ values
+        minPenXPos = FLT_MAX;
+        minPenXNeg = FLT_MAX;
+        minPenZPos = FLT_MAX;
+        minPenZNeg = FLT_MAX;
+        // Clear XZ colliding blocks at the start of collision check
+        collidingBlocksXZ.clear();
         XZCollision = false;
         int count = 0;
         for(float x = min_x; x< max_x; x++){
@@ -290,10 +322,10 @@ void resolveXZCollision(glm::vec3& p_nextPlayerPosition){
                         blockBox.max = glm::vec3(x + BLOCK_SIZE/2 + gap, y + BLOCK_SIZE/2, z + BLOCK_SIZE/2 + gap); // without this gap there is the teleportation issue for -x and -z not sure why but this fixes it
                         blockBox.min = glm::vec3(x - BLOCK_SIZE/2 - gap, y - BLOCK_SIZE/2, z - BLOCK_SIZE/2 - gap);
                         if (boxesOverlap(nextPlayerBox, blockBox)){
-                                std::cout << "XZCollision with block at: (" 
-                                        << x << ", " 
-                                        << y << ", " 
-                                        << z << ")" << std::endl;
+                                // std::cout << "XZCollision with block at: (" 
+                                //         << x << ", " 
+                                //         << y << ", " 
+                                //         << z << ")" << std::endl;
                                 count++;
                                 minPenXNeg = std::min(minPenXNeg, std::max(0.0f, blockBox.max.x - nextPlayerBox.min.x));
                                 minPenXPos = std::min(minPenXPos, std::max(0.0f, nextPlayerBox.max.x - blockBox.min.x)); 
@@ -302,6 +334,18 @@ void resolveXZCollision(glm::vec3& p_nextPlayerPosition){
                                 minPenZPos = std::min(minPenZPos, std::max(0.0f, nextPlayerBox.max.z - blockBox.min.z));
 
                                 XZCollision = true;
+                                // Add colliding block position for XZ only if not already present
+                                glm::ivec3 blockPos(x, y, z);
+                                bool alreadyPresent = false;
+                                for (const auto& blk : collidingBlocksXZ) {
+                                    if (blk == blockPos) {
+                                        alreadyPresent = true;
+                                        break;
+                                    }
+                                }
+                                if (!alreadyPresent) {
+                                    collidingBlocksXZ.push_back(blockPos);
+                                }
                         }                        
                     }
                 }
@@ -314,7 +358,10 @@ void resolveXZCollision(glm::vec3& p_nextPlayerPosition){
             std::cout << "minPenZNeg: " << minPenZNeg << std::endl;
             std::cout << "minPenZPos: " << minPenZPos << std::endl;
             std::cout << "XZCollision count: " << count << std::endl;
-            
+            std::cout << "Before XZ collision resolution: (" 
+                      << p_nextPlayerPosition.x << ", " 
+                      << p_nextPlayerPosition.y << ", " 
+                      << p_nextPlayerPosition.z << ")" << std::endl;
             // X axis
             if (minPenXNeg < FLT_MAX && minPenXPos < FLT_MAX && (minPenXNeg < COLLISION_THRESHOLD || minPenXPos < COLLISION_THRESHOLD)) {
                 if (minPenXNeg < minPenXPos) {
@@ -322,8 +369,7 @@ void resolveXZCollision(glm::vec3& p_nextPlayerPosition){
                 } else {
                     p_nextPlayerPosition.x -= minPenXPos;
                 }
-            }
-            
+            }            
             // Z axis
             if (minPenZNeg < FLT_MAX && minPenZPos < FLT_MAX && (minPenZNeg < COLLISION_THRESHOLD || minPenZPos < COLLISION_THRESHOLD)) {
                 if (minPenZNeg < minPenZPos) {
@@ -332,6 +378,10 @@ void resolveXZCollision(glm::vec3& p_nextPlayerPosition){
                     p_nextPlayerPosition.z -= minPenZPos;
                 }
             }
+            std::cout << "After XZ collision resolution: (" 
+                      << p_nextPlayerPosition.x << ", " 
+                      << p_nextPlayerPosition.y << ", " 
+                      << p_nextPlayerPosition.z << ")" << std::endl;            
 
         } 
         
@@ -339,8 +389,8 @@ void resolveXZCollision(glm::vec3& p_nextPlayerPosition){
 
 glm::vec3 resolveCollision(glm::vec3 p_nextPlayerPosition){
     
-    resolveYCollision(p_nextPlayerPosition);    
     resolveXZCollision(p_nextPlayerPosition);     
+    resolveYCollision(p_nextPlayerPosition);    
 
     return p_nextPlayerPosition;    
 
@@ -547,12 +597,11 @@ int main(){
         processInput(window);
 
         // plater state update
-        nextPlayerPosition = playerPosition;
         if(!onGround) {
             velocity -= gravity * deltaTime;
         }
-        nextPlayerPosition.y += (velocity * deltaTime);
-        playerPosition = resolveCollision(nextPlayerPosition);
+        playerPosition.y += (velocity * deltaTime);
+        playerPosition = resolveCollision(playerPosition);
 
         // Update camera position
         cameraPos = playerPosition + glm::vec3(0.0f, eyeHeight, 0.0f);
@@ -565,12 +614,45 @@ int main(){
 
         ImGui::Begin("Debug Window");
         ImGui::Text("Player Position: %.2f, %.2f, %.2f", playerPosition.x, playerPosition.y, playerPosition.z);
+        ImGui::Text("Player Bounding Box:");
+        ImGui::Text("  min: (%.2f, %.2f, %.2f)", 
+            playerPosition.x - playerWidth/2, 
+            playerPosition.y, 
+            playerPosition.z - playerDepth/2);
+        ImGui::Text("  max: (%.2f, %.2f, %.2f)", 
+            playerPosition.x + playerWidth/2, 
+            playerPosition.y + playerHeight, 
+            playerPosition.z + playerDepth/2);
         ImGui::Text("On Ground: %s", onGround ? "Yes" : "No");
         ImGui::Text("Velocity: %.2f", velocity);
         ImGui::Text("Y Collision: %s", YCollision ? "Yes" : "No");
         ImGui::Text("XZ Collision: %s", XZCollision ? "Yes" : "No");
+        ImGui::Text("minPenYNeg: %s", minPenYNeg == FLT_MAX ? "none" : std::to_string(minPenYNeg).c_str());
+        ImGui::Text("minPenYPos: %s", minPenYPos == FLT_MAX ? "none" : std::to_string(minPenYPos).c_str());
+        ImGui::Text("minPenXNeg: %s", minPenXNeg == FLT_MAX ? "none" : std::to_string(minPenXNeg).c_str());
+        ImGui::Text("minPenXPos: %s", minPenXPos == FLT_MAX ? "none" : std::to_string(minPenXPos).c_str());
+        ImGui::Text("minPenZNeg: %s", minPenZNeg == FLT_MAX ? "none" : std::to_string(minPenZNeg).c_str());
+        ImGui::Text("minPenZPos: %s", minPenZPos == FLT_MAX ? "none" : std::to_string(minPenZPos).c_str());
+        // Print currently colliding blocks for Y
+        if (!collidingBlocksY.empty()) {
+            ImGui::Text("Y Colliding Blocks:");
+            for (const auto& blk : collidingBlocksY) {
+                ImGui::Text("  (%d, %d, %d)", blk.x, blk.y, blk.z);
+            }
+        } else {
+            ImGui::Text("Y Colliding Blocks: none");
+        }
+        // Print currently colliding blocks for XZ
+        if (!collidingBlocksXZ.empty()) {
+            ImGui::Text("XZ Colliding Blocks:");
+            for (const auto& blk : collidingBlocksXZ) {
+                ImGui::Text("  (%d, %d, %d)", blk.x, blk.y, blk.z);
+            }
+        } else {
+            ImGui::Text("XZ Colliding Blocks: none");
+        }
         if (ImGui::Button("Reset Position")) {
-            playerPosition = glm::vec3(0.0f, 10.0f, 0.0f);
+            playerPosition = glm::vec3(0.0f, 5.0f, 0.0f);
             velocity = 0.0f;
             onGround = false;
         }
