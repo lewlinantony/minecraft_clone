@@ -169,7 +169,8 @@ glm::vec3 resolveYCollision(glm::vec3& p_nextPlayerPosition){
 }
 
 glm::vec3 resolveXZCollision(glm::vec3& p_nextPlayerPosition){
-        // Update player bounding box after X collision
+
+        
         nextPlayerBox.max.x = p_nextPlayerPosition.x + (playerWidth / 2);
         nextPlayerBox.max.y = p_nextPlayerPosition.y + playerHeight;
         nextPlayerBox.max.z = p_nextPlayerPosition.z + (playerDepth / 2);
@@ -194,155 +195,306 @@ glm::vec3 resolveXZCollision(glm::vec3& p_nextPlayerPosition){
         XCollision = false;
         ZCollision = false;
 
-        std::cout << "Before Position: " << p_nextPlayerPosition.x << ", " << p_nextPlayerPosition.z << std::endl;
-
-        // First pass: X collision
-        int xCollisionCount = 0;
+        // First pass: Check both X and Z collisions to determine penetration values
         std::vector<glm::ivec3> xCollidedBlocks;
-        for (int x = min_x; x < max_x; x++) {
-            for (int y = min_y; y < max_y; y++) {
-                for (int z = min_z; z < max_z; z++) {
-                    if (blockMap[glm::ivec3(x, y, z)]) {
-                    BoundingBox blockBox;
-                    blockBox.max = glm::vec3(x + BLOCK_SIZE / 2 + gap, y + BLOCK_SIZE / 2, z + BLOCK_SIZE / 2 + gap);
-                    blockBox.min = glm::vec3(x - BLOCK_SIZE / 2 - gap, y - BLOCK_SIZE / 2, z - BLOCK_SIZE / 2 - gap);
-                    if (boxesOverlap(nextPlayerBox, blockBox)) {
-                        minPenXNeg = std::min(minPenXNeg, std::max(0.0f, blockBox.max.x - nextPlayerBox.min.x));
-                        minPenXPos = std::min(minPenXPos, std::max(0.0f, nextPlayerBox.max.x - blockBox.min.x));
-                        XCollision = true;
-                        xCollisionCount++;
-                        xCollidedBlocks.push_back(glm::ivec3(x, y, z));
-                    }
-                    }
-                }
-            }
-        }
-
-        if (XCollision) {
-            std::cout << "X Collision: True" << std::endl;
-            std::cout << "Number of blocks collided in X: " << xCollisionCount << std::endl;
-            std::cout << "Min Penetration X: " << minPenXNeg << " (Neg), " << minPenXPos << " (Pos)" << std::endl;
-            std::cout << "Blocks collided in X: " << std::endl;
-            for (const auto& block : xCollidedBlocks) {
-                std::cout << "Block Position: " << block.x << ", " << block.y << ", " << block.z << std::endl;
-            }
-
-            if (minPenXNeg < FLT_MAX && minPenXPos < FLT_MAX && (minPenXNeg < COLLISION_THRESHOLD || minPenXPos < COLLISION_THRESHOLD)) {
-                if (minPenXNeg < minPenXPos) {
-                    p_nextPlayerPosition.x += minPenXNeg;
-                } else {
-                    p_nextPlayerPosition.x -= minPenXPos;
-                }
-            }
-            std::cout << "After X Collision Resolve: " << p_nextPlayerPosition.x << ", " << p_nextPlayerPosition.z << std::endl;
-
-        } else {
-            std::cout << "X Collision: False" << std::endl;
-        }
-
-        nextPlayerBox.max.x = p_nextPlayerPosition.x + (playerWidth / 2);
-        nextPlayerBox.min.x = p_nextPlayerPosition.x - (playerWidth / 2);
-
-        max_x = (int)glm::ceil(nextPlayerBox.max.x + margin);
-        min_x = (int)glm::floor(nextPlayerBox.min.x - margin);
-
-
-        // Second pass: Z collision
-        int zCollisionCount = 0;
         std::vector<glm::ivec3> zCollidedBlocks;
+        
         for (int x = min_x; x < max_x; x++) {
             for (int y = min_y; y < max_y; y++) {
                 for (int z = min_z; z < max_z; z++) {
                     if (blockMap[glm::ivec3(x, y, z)]) {
+                    // Check X collision (no gap for initial detection)
                     BoundingBox blockBox;
-                    blockBox.max = glm::vec3(x + BLOCK_SIZE / 2 + gap, y + BLOCK_SIZE / 2, z + BLOCK_SIZE / 2 + gap);
-                    blockBox.min = glm::vec3(x - BLOCK_SIZE / 2 - gap, y - BLOCK_SIZE / 2, z - BLOCK_SIZE / 2 - gap);
+                    blockBox.max = glm::vec3(x + BLOCK_SIZE / 2, y + BLOCK_SIZE / 2, z + BLOCK_SIZE / 2);
+                    blockBox.min = glm::vec3(x - BLOCK_SIZE / 2, y - BLOCK_SIZE / 2, z - BLOCK_SIZE / 2);
+
+                    float penXNeg = std::max(0.0f, blockBox.max.x - nextPlayerBox.min.x);
+                    float penXPos = std::max(0.0f, nextPlayerBox.max.x - blockBox.min.x);
+                    float penZNeg = std::max(0.0f, blockBox.max.z - nextPlayerBox.min.z);
+                    float penZPos = std::max(0.0f, nextPlayerBox.max.z - blockBox.min.z);
+
+
+                    // Ensure penetration values are from the same block
                     if (boxesOverlap(nextPlayerBox, blockBox)) {
-                        minPenZNeg = std::min(minPenZNeg, std::max(0.0f, blockBox.max.z - nextPlayerBox.min.z));
-                        minPenZPos = std::min(minPenZPos, std::max(0.0f, nextPlayerBox.max.z - blockBox.min.z));
-                        ZCollision = true;
-                        zCollisionCount++;
-                        zCollidedBlocks.push_back(glm::ivec3(x, y, z));
-                    }
-                    }
-                }
-            }
-        }
-
-        if (ZCollision) {
-            std::cout << "Z Collision: True" << std::endl;
-            std::cout << "Number of blocks collided in Z: " << zCollisionCount << std::endl;
-            std::cout << "Min Penetration Z: " << minPenZNeg << " (Neg), " << minPenZPos << " (Pos)" << std::endl;
-            std::cout << "Blocks collided in Z: " << std::endl;
-            for (const auto& block : zCollidedBlocks) {
-                std::cout << "Block Position: " << block.x << ", " << block.y << ", " << block.z << std::endl;
-            }
-
-            if (minPenZNeg < FLT_MAX && minPenZPos < FLT_MAX && (minPenZNeg < COLLISION_THRESHOLD || minPenZPos < COLLISION_THRESHOLD)) {
-                if (minPenZNeg < minPenZPos) {
-                    p_nextPlayerPosition.z += minPenZNeg;
-                } else {
-                    p_nextPlayerPosition.z -= minPenZPos;
-                }
-            }
-            std::cout << "After Z Collision Resolve: " << p_nextPlayerPosition.x << ", " << p_nextPlayerPosition.z << std::endl;
-
-        } else {
-            std::cout << "Z Collision: False" << std::endl;
-        }
-
-
-        nextPlayerBox.max.z = p_nextPlayerPosition.z + (playerWidth / 2);
-        nextPlayerBox.min.z = p_nextPlayerPosition.z - (playerWidth / 2);
-
-        max_z = (int)glm::ceil(nextPlayerBox.max.z + margin);
-        min_z = (int)glm::floor(nextPlayerBox.min.z - margin);
-
-        // First pass: X collision
-        xCollisionCount = 0;
-        for (int x = min_x; x < max_x; x++) {
-            for (int y = min_y; y < max_y; y++) {
-                for (int z = min_z; z < max_z; z++) {
-                    if (blockMap[glm::ivec3(x, y, z)]) {
-                    BoundingBox blockBox;
-                    blockBox.max = glm::vec3(x + BLOCK_SIZE / 2 + gap, y + BLOCK_SIZE / 2, z + BLOCK_SIZE / 2 + gap);
-                    blockBox.min = glm::vec3(x - BLOCK_SIZE / 2 - gap, y - BLOCK_SIZE / 2, z - BLOCK_SIZE / 2 - gap);
-                    if (boxesOverlap(nextPlayerBox, blockBox)) {
-                        minPenXNeg = std::min(minPenXNeg, std::max(0.0f, blockBox.max.x - nextPlayerBox.min.x));
-                        minPenXPos = std::min(minPenXPos, std::max(0.0f, nextPlayerBox.max.x - blockBox.min.x));
+                        if (penXNeg < minPenXNeg && penXPos < minPenXPos) {
+                        minPenXNeg = penXNeg;
+                        minPenXPos = penXPos;
                         XCollision = true;
-                        xCollisionCount++;
                         xCollidedBlocks.push_back(glm::ivec3(x, y, z));
+                        }
+                        if (penZNeg < minPenZNeg && penZPos < minPenZPos) {
+                        minPenZNeg = penZNeg;
+                        minPenZPos = penZPos;
+                        ZCollision = true;
+                        zCollidedBlocks.push_back(glm::ivec3(x, y, z));
+                        }
                     }
                     }
                 }
             }
         }
 
-        if (XCollision) {
-            std::cout << "X Collision: True" << std::endl;
-            std::cout << "Number of blocks collided in X: " << xCollisionCount << std::endl;
-            std::cout << "Min Penetration X: " << minPenXNeg << " (Neg), " << minPenXPos << " (Pos)" << std::endl;
-            std::cout << "Blocks collided in X: " << std::endl;
-            for (const auto& block : xCollidedBlocks) {
-                std::cout << "Block Position: " << block.x << ", " << block.y << ", " << block.z << std::endl;
-            }
+        // Determine minimum penetrations for each axis
+        float minXPen = std::min(minPenXNeg, minPenXPos);
+        float minZPen = std::min(minPenZNeg, minPenZPos);
 
-            if (minPenXNeg < FLT_MAX && minPenXPos < FLT_MAX && (minPenXNeg < COLLISION_THRESHOLD || minPenXPos < COLLISION_THRESHOLD)) {
-                if (minPenXNeg < minPenXPos) {
-                    p_nextPlayerPosition.x += minPenXNeg;
-                } else {
-                    p_nextPlayerPosition.x -= minPenXPos;
+        // Debug output
+        std::cout << "Minimum Penetration X: " << minPenXNeg << " (Neg), " << minPenXPos << " (Pos)" << std::endl;
+        std::cout << "Minimum Penetration Z: " << minPenZNeg << " (Neg), " << minPenZPos << " (Pos)" << std::endl;
+        
+        if (minZPen <= minXPen) {       
+
+            std::cout << "Resolving Z Collision First" << std::endl;
+            // Update player bounding box after X collision
+            nextPlayerBox.max.x = p_nextPlayerPosition.x + (playerWidth / 2);
+            nextPlayerBox.max.y = p_nextPlayerPosition.y + playerHeight;
+            nextPlayerBox.max.z = p_nextPlayerPosition.z + (playerDepth / 2);
+
+            nextPlayerBox.min.x = p_nextPlayerPosition.x - (playerWidth / 2);
+            nextPlayerBox.min.y = p_nextPlayerPosition.y;
+            nextPlayerBox.min.z = p_nextPlayerPosition.z - (playerDepth / 2);
+
+            int max_x = (int)glm::ceil(nextPlayerBox.max.x + margin);
+            int max_y = (int)glm::ceil(nextPlayerBox.max.y + margin);
+            int max_z = (int)glm::ceil(nextPlayerBox.max.z + margin);
+
+            int min_x = (int)glm::floor(nextPlayerBox.min.x - margin);
+            int min_y = (int)glm::floor(nextPlayerBox.min.y - margin);
+            int min_z = (int)glm::floor(nextPlayerBox.min.z - margin);
+
+            // Reset global minPenXZ values
+            minPenXPos = FLT_MAX;
+            minPenXNeg = FLT_MAX;
+            minPenZPos = FLT_MAX;
+            minPenZNeg = FLT_MAX;
+            XCollision = false;
+            ZCollision = false;
+
+            std::cout << "Z Before Position: " << p_nextPlayerPosition.x << ", "<< p_nextPlayerPosition.y<<", "<< p_nextPlayerPosition.z << std::endl;
+            // Second pass: Z collision
+            int zCollisionCount = 0;
+            std::vector<glm::ivec3> zCollidedBlocks;
+            for (int x = min_x; x < max_x; x++) {
+                for (int y = min_y; y < max_y; y++) {
+                    for (int z = min_z; z < max_z; z++) {
+                        if (blockMap[glm::ivec3(x, y, z)]) {
+                        BoundingBox blockBox;
+                        blockBox.max = glm::vec3(x + BLOCK_SIZE / 2 , y + BLOCK_SIZE / 2, z + BLOCK_SIZE / 2 + gap);
+                        blockBox.min = glm::vec3(x - BLOCK_SIZE / 2 , y - BLOCK_SIZE / 2, z - BLOCK_SIZE / 2 - gap);
+                        if (boxesOverlap(nextPlayerBox, blockBox)) {
+                            minPenZNeg = std::min(minPenZNeg, std::max(0.0f, blockBox.max.z - nextPlayerBox.min.z));
+                            minPenZPos = std::min(minPenZPos, std::max(0.0f, nextPlayerBox.max.z - blockBox.min.z));
+                            ZCollision = true;
+                            zCollisionCount++;
+                            zCollidedBlocks.push_back(glm::ivec3(x, y, z));
+                        }
+                        }
+                    }
                 }
             }
-            std::cout << "After X Collision Resolve: " << p_nextPlayerPosition.x << ", " << p_nextPlayerPosition.z << std::endl;
 
-        } else {
-            std::cout << "X Collision: False" << std::endl;
-        }        
+            if (ZCollision) {
+                std::cout << "Z Collision: True" << std::endl;
+                std::cout << "Number of blocks collided in Z: " << zCollisionCount << std::endl;
+                std::cout << "Min Penetration Z: " << minPenZNeg << " (Neg), " << minPenZPos << " (Pos)" << std::endl;
+                std::cout << "Blocks collided in Z: " << std::endl;
+                for (const auto& block : zCollidedBlocks) {
+                    std::cout << "Block Position: " << block.x << ", " << block.y << ", " << block.z << std::endl;
+                }
 
-        std::cout << "After Position: " << p_nextPlayerPosition.x << ", " << p_nextPlayerPosition.z << std::endl;
-        std::cout << "\n" << std::endl;
+                if (minPenZNeg < FLT_MAX && minPenZPos < FLT_MAX && (minPenZNeg < COLLISION_THRESHOLD || minPenZPos < COLLISION_THRESHOLD)) {
+                    if (minPenZNeg < minPenZPos) {
+                        p_nextPlayerPosition.z += minPenZNeg;
+                    } else {
+                        p_nextPlayerPosition.z -= minPenZPos;
+                    }
+                }
+                std::cout << "After Z Collision Resolve: " << p_nextPlayerPosition.x << ", "<< p_nextPlayerPosition.y<<", "<< p_nextPlayerPosition.z << std::endl;
+
+            } else {
+                std::cout << "Z Collision: False" << std::endl;
+            }
+            nextPlayerBox.max.z = p_nextPlayerPosition.z + (playerWidth / 2);
+            nextPlayerBox.min.z = p_nextPlayerPosition.z - (playerWidth / 2);
+
+            max_z = (int)glm::ceil(nextPlayerBox.max.z + margin);
+            min_z = (int)glm::floor(nextPlayerBox.min.z - margin);
+
+            std::cout << "X Before Position: " << p_nextPlayerPosition.x << ", "<< p_nextPlayerPosition.y<<", "<< p_nextPlayerPosition.z << std::endl;
+
+            // First pass: X collision
+            int xCollisionCount = 0;
+            std::vector<glm::ivec3> xCollidedBlocks;
+            for (int x = min_x; x < max_x; x++) {
+                for (int y = min_y; y < max_y; y++) {
+                    for (int z = min_z; z < max_z; z++) {
+                        if (blockMap[glm::ivec3(x, y, z)]) {
+                        BoundingBox blockBox;
+                        blockBox.max = glm::vec3(x + BLOCK_SIZE / 2 + gap, y + BLOCK_SIZE / 2, z + BLOCK_SIZE / 2);
+                        blockBox.min = glm::vec3(x - BLOCK_SIZE / 2 - gap, y - BLOCK_SIZE / 2, z - BLOCK_SIZE / 2);
+                        if (boxesOverlap(nextPlayerBox, blockBox)) {
+                            minPenXNeg = std::min(minPenXNeg, std::max(0.0f, blockBox.max.x - nextPlayerBox.min.x));
+                            minPenXPos = std::min(minPenXPos, std::max(0.0f, nextPlayerBox.max.x - blockBox.min.x));
+                            XCollision = true;
+                            xCollisionCount++;
+                            xCollidedBlocks.push_back(glm::ivec3(x, y, z));
+                        }
+                        }
+                    }
+                }
+            }
+
+            if (XCollision) {
+                std::cout << "X Collision: True" << std::endl;
+                std::cout << "Number of blocks collided in X: " << xCollisionCount << std::endl;
+                std::cout << "Min Penetration X: " << minPenXNeg << " (Neg), " << minPenXPos << " (Pos)" << std::endl;
+                std::cout << "Blocks collided in X: " << std::endl;
+                for (const auto& block : xCollidedBlocks) {
+                    std::cout << "Block Position: " << block.x << ", " << block.y << ", " << block.z << std::endl;
+                }
+
+                if (minPenXNeg < FLT_MAX && minPenXPos < FLT_MAX && (minPenXNeg < COLLISION_THRESHOLD || minPenXPos < COLLISION_THRESHOLD)) {
+                    if (minPenXNeg < minPenXPos) {
+                        p_nextPlayerPosition.x += minPenXNeg;
+                    } else {
+                        p_nextPlayerPosition.x -= minPenXPos;
+                    }
+                }
+                std::cout << "After X Collision Resolve: " << p_nextPlayerPosition.x << ", "<< p_nextPlayerPosition.y<<", "<< p_nextPlayerPosition.z << std::endl;
+
+            } else {
+                std::cout << "X Collision: False" << std::endl;
+            }
+        
+        }
+        else{
+            std::cout << "Resolving X Collision First" << std::endl;
+
+            // Update player bounding box after X collision
+            nextPlayerBox.max.x = p_nextPlayerPosition.x + (playerWidth / 2);
+            nextPlayerBox.max.y = p_nextPlayerPosition.y + playerHeight;
+            nextPlayerBox.max.z = p_nextPlayerPosition.z + (playerDepth / 2);
+
+            nextPlayerBox.min.x = p_nextPlayerPosition.x - (playerWidth / 2);
+            nextPlayerBox.min.y = p_nextPlayerPosition.y;
+            nextPlayerBox.min.z = p_nextPlayerPosition.z - (playerDepth / 2);
+
+            int max_x = (int)glm::ceil(nextPlayerBox.max.x + margin);
+            int max_y = (int)glm::ceil(nextPlayerBox.max.y + margin);
+            int max_z = (int)glm::ceil(nextPlayerBox.max.z + margin);
+
+            int min_x = (int)glm::floor(nextPlayerBox.min.x - margin);
+            int min_y = (int)glm::floor(nextPlayerBox.min.y - margin);
+            int min_z = (int)glm::floor(nextPlayerBox.min.z - margin);
+
+            // Reset global minPenXZ values
+            minPenXPos = FLT_MAX;
+            minPenXNeg = FLT_MAX;
+            minPenZPos = FLT_MAX;
+            minPenZNeg = FLT_MAX;
+            XCollision = false;
+            ZCollision = false;
+
+            std::cout << "X Before Position: " << p_nextPlayerPosition.x << ", "<< p_nextPlayerPosition.y<<", "<< p_nextPlayerPosition.z << std::endl;
+
+            // First pass: X collision
+            int xCollisionCount = 0;
+            std::vector<glm::ivec3> xCollidedBlocks;
+            for (int x = min_x; x < max_x; x++) {
+                for (int y = min_y; y < max_y; y++) {
+                    for (int z = min_z; z < max_z; z++) {
+                        if (blockMap[glm::ivec3(x, y, z)]) {
+                            BoundingBox blockBox;
+                            blockBox.max = glm::vec3(x + BLOCK_SIZE / 2 + gap, y + BLOCK_SIZE / 2, z + BLOCK_SIZE / 2);
+                            blockBox.min = glm::vec3(x - BLOCK_SIZE / 2 - gap, y - BLOCK_SIZE / 2, z - BLOCK_SIZE / 2);
+                            if (boxesOverlap(nextPlayerBox, blockBox)) {
+                                minPenXNeg = std::min(minPenXNeg, std::max(0.0f, blockBox.max.x - nextPlayerBox.min.x));
+                                minPenXPos = std::min(minPenXPos, std::max(0.0f, nextPlayerBox.max.x - blockBox.min.x));
+                                XCollision = true;
+                                xCollisionCount++;
+                                xCollidedBlocks.push_back(glm::ivec3(x, y, z));
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (XCollision) {
+                std::cout << "X Collision: True" << std::endl;
+                std::cout << "Number of blocks collided in X: " << xCollisionCount << std::endl;
+                std::cout << "Min Penetration X: " << minPenXNeg << " (Neg), " << minPenXPos << " (Pos)" << std::endl;
+                std::cout << "Blocks collided in X: " << std::endl;
+                for (const auto& block : xCollidedBlocks) {
+                    std::cout << "Block Position: " << block.x << ", " << block.y << ", " << block.z << std::endl;
+                }
+
+                if (minPenXNeg < FLT_MAX && minPenXPos < FLT_MAX && (minPenXNeg < COLLISION_THRESHOLD || minPenXPos < COLLISION_THRESHOLD)) {
+                    if (minPenXNeg < minPenXPos) {
+                        p_nextPlayerPosition.x += minPenXNeg;
+                    } else {
+                        p_nextPlayerPosition.x -= minPenXPos;
+                    }
+                }
+                std::cout << "After X Collision Resolve: " << p_nextPlayerPosition.x << ", "<< p_nextPlayerPosition.y<<", "<< p_nextPlayerPosition.z << std::endl;
+
+            } else {
+                std::cout << "X Collision: False" << std::endl;
+            }                    
+
+            nextPlayerBox.max.x = p_nextPlayerPosition.x + (playerWidth / 2);
+            nextPlayerBox.min.x = p_nextPlayerPosition.x - (playerWidth / 2);
+
+            max_x = (int)glm::ceil(nextPlayerBox.max.x + margin);
+            min_x = (int)glm::floor(nextPlayerBox.min.x - margin);
+
+            std::cout << "Z Before Position: " << p_nextPlayerPosition.x << ", "<< p_nextPlayerPosition.y<<", "<< p_nextPlayerPosition.z << std::endl;
+            // Second pass: Z collision
+            int zCollisionCount = 0;
+            std::vector<glm::ivec3> zCollidedBlocks;
+            for (int x = min_x; x < max_x; x++) {
+                for (int y = min_y; y < max_y; y++) {
+                    for (int z = min_z; z < max_z; z++) {
+                        if (blockMap[glm::ivec3(x, y, z)]) {
+                            BoundingBox blockBox;
+                            blockBox.max = glm::vec3(x + BLOCK_SIZE / 2 , y + BLOCK_SIZE / 2, z + BLOCK_SIZE / 2 + gap);
+                            blockBox.min = glm::vec3(x - BLOCK_SIZE / 2 , y - BLOCK_SIZE / 2, z - BLOCK_SIZE / 2 - gap);
+                            if (boxesOverlap(nextPlayerBox, blockBox)) {
+                                minPenZNeg = std::min(minPenZNeg, std::max(0.0f, blockBox.max.z - nextPlayerBox.min.z));
+                                minPenZPos = std::min(minPenZPos, std::max(0.0f, nextPlayerBox.max.z - blockBox.min.z));
+                                ZCollision = true;
+                                zCollisionCount++;
+                                zCollidedBlocks.push_back(glm::ivec3(x, y, z));
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (ZCollision) {
+                std::cout << "Z Collision: True" << std::endl;
+                std::cout << "Number of blocks collided in Z: " << zCollisionCount << std::endl;
+                std::cout << "Min Penetration Z: " << minPenZNeg << " (Neg), " << minPenZPos << " (Pos)" << std::endl;
+                std::cout << "Blocks collided in Z: " << std::endl;
+                for (const auto& block : zCollidedBlocks) {
+                    std::cout << "Block Position: " << block.x << ", " << block.y << ", " << block.z << std::endl;
+                }
+
+                if (minPenZNeg < FLT_MAX && minPenZPos < FLT_MAX && (minPenZNeg < COLLISION_THRESHOLD || minPenZPos < COLLISION_THRESHOLD)) {
+                    if (minPenZNeg < minPenZPos) {
+                        p_nextPlayerPosition.z += minPenZNeg;
+                    } else {
+                        p_nextPlayerPosition.z -= minPenZPos;
+                    }
+                }
+                std::cout << "After Z Collision Resolve: " << p_nextPlayerPosition.x << ", "<< p_nextPlayerPosition.y<<", "<< p_nextPlayerPosition.z << std::endl;
+
+            } else {
+                std::cout << "Z Collision: False" << std::endl;
+            }
+
+
+        }
+        std::cout<< "\n";           
 
         return p_nextPlayerPosition;
         
@@ -557,17 +709,22 @@ int main(){
     
     for (unsigned int x = 0; x < terrainSize; x++) {
         for (unsigned int z = 0; z < terrainSize; z++) {
-            for (int y = -1; y < 4; y++) {  
+            for (int y = 0; y < 1; y++) {  
                 float height = noise.GetNoise((float)x, (float)z); 
                 height = glm::round(height);
                 glm::vec3 Pos;
-                if (y==height)
-                    Pos = glm::vec3((float)z - (terrainSize-1)/2.0f, height, (float)x - (terrainSize-1)/2.0f);
-                else if (y < height) {
-                    Pos = glm::vec3((float)z - (terrainSize-1)/2.0f, (float)y, (float)x - (terrainSize-1)/2.0f);
-                }
-                else{
-                    continue; // skip if y is above the terrain height
+                // if (y==height)
+                //     Pos = glm::vec3((float)z - (terrainSize-1)/2.0f, height, (float)x - (terrainSize-1)/2.0f);
+                // else if (y < height) {
+                //     Pos = glm::vec3((float)z - (terrainSize-1)/2.0f, (float)y, (float)x - (terrainSize-1)/2.0f);
+                // }
+                // else{
+                //     continue; // skip if y is above the terrain height
+                // }
+                if (x == (int)terrainSize / 2) {
+                    Pos = glm::vec3((float)z - (terrainSize - 1) / 2.0f, 1.0f, (float)x - (terrainSize - 1) / 2.0f);
+                } else {
+                    Pos = glm::vec3((float)z - (terrainSize - 1) / 2.0f, 0.0f, (float)x - (terrainSize - 1) / 2.0f);
                 }
                 glm::ivec3 key = glm::ivec3(glm::floor(Pos));
                 blockMap[key] = true;
@@ -577,14 +734,6 @@ int main(){
 
 
 
-    // Add sample blocks for debugging
-    // blockMap[glm::ivec3(0, 1, 0)] = true; // Straight blocks
-    // blockMap[glm::ivec3(0, 1, 1)] = true;
-    // blockMap[glm::ivec3(0, 1, 2)] = true;
-
-    // blockMap[glm::ivec3(1, 1, 1)] = true; // Diagonal blocks
-    // blockMap[glm::ivec3(2, 1, 2)] = true;
-    // blockMap[glm::ivec3(3, 1, 3)] = true;
 
 
 
