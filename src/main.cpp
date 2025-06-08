@@ -61,6 +61,8 @@ bool spaceWasPressed = false;
 bool spaceIsPressed = false;
 bool tabWasPressed = false;
 bool tabIsPressed = false;
+bool mouseLeftIsPressed = false; // Added declaration for mouseLeftIsPressed
+bool mouseLeftWasPressed = false; // Added declaration for mouseLeftWasPressed
 
 // Movement scaling
 float MOVE_SCALE = 0.1f;
@@ -307,6 +309,7 @@ void processInput(GLFWwindow* window){
         MOVE_SCALE = 0.5f;
     }
     
+    // toggle mouse lock
     tabIsPressed = glfwGetKey(window, GLFW_KEY_TAB) == GLFW_PRESS;
     if (tabIsPressed && !tabWasPressed) {
         int mode = glfwGetInputMode(window, GLFW_CURSOR);
@@ -320,10 +323,9 @@ void processInput(GLFWwindow* window){
     }
     tabWasPressed = tabIsPressed;
 
-  
+    // WSAD movement
     glm::vec3 nextPlayerPosition = playerPosition;
     glm::vec3 xz_movement = glm::vec3(0.0f); // Store intended movement
-
     if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS){
         xz_movement += front * speed * MOVE_SCALE;
     }
@@ -347,6 +349,13 @@ void processInput(GLFWwindow* window){
         onGround = false;
     }
     spaceWasPressed = spaceIsPressed;
+
+    mouseLeftIsPressed = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+    if ( mouseLeftIsPressed && !mouseLeftWasPressed && selectedBlock != glm::ivec3(INT_MAX, INT_MAX, INT_MAX) ) {
+        blockMap.erase(selectedBlock);
+    }
+    mouseLeftWasPressed = mouseLeftIsPressed;
+
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height){
@@ -589,13 +598,13 @@ int main(){
         // Update camera position
         cameraPos = playerPosition + glm::vec3(0.0f, eyeHeight, 0.0f);
 
-        //RayCasting to select blocks
-        glm::vec3 ray = glm::normalize(cameraFront);
+        // RayCasting to select blocks
+        glm::vec3 rayDirection = glm::normalize(cameraFront); //unit vector in the direction of the camera
         glm::vec3 rayOrigin = cameraPos;
         selectedBlock = glm::ivec3(INT_MAX, INT_MAX, INT_MAX); // Reset selected block to an unlikely value
 
         for (float i = rayStart; i < rayEnd; i += rayStep) {
-            glm::vec3 point = rayOrigin + ray * i;
+            glm::vec3 point = rayOrigin + rayDirection * i; 
             glm::ivec3 blockPosition = glm::ivec3(glm::round(point));
             if (blockMap.find(blockPosition) != blockMap.end() and blockMap[blockPosition]) {
                 selectedBlock = blockPosition;
