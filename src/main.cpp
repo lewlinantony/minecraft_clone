@@ -146,13 +146,12 @@ glm::vec3 resolveYCollision(glm::vec3& p_nextPlayerPosition, glm::vec3 y_movemen
     return p_nextPlayerPosition;
 }
 
-glm::vec3 resolveXZCollision(glm::vec3 p_nextPlayerPosition, glm::vec3 movement) {
+glm::vec3 resolveXZCollision(glm::vec3 p_nextPlayerPosition, glm::vec3 p_velocity) {
     // Resolve X-axis collision
-    if (movement.x != 0) {
+    if (p_velocity.x != 0) {
         nextPlayerBox.max.x = p_nextPlayerPosition.x + (playerWidth / 2);
         nextPlayerBox.min.x = p_nextPlayerPosition.x - (playerWidth / 2);
         nextPlayerBox.max.y = playerPosition.y + playerHeight;
-
         nextPlayerBox.min.y = playerPosition.y;
         nextPlayerBox.max.z = playerPosition.z + (playerDepth / 2);
         nextPlayerBox.min.z = playerPosition.z - (playerDepth / 2);
@@ -160,7 +159,6 @@ glm::vec3 resolveXZCollision(glm::vec3 p_nextPlayerPosition, glm::vec3 movement)
         int max_x = (int)glm::ceil(nextPlayerBox.max.x + margin);
         int max_y = (int)glm::ceil(nextPlayerBox.max.y + margin);
         int max_z = (int)glm::ceil(nextPlayerBox.max.z + margin);
-
         int min_x = (int)glm::floor(nextPlayerBox.min.x - margin);
         int min_y = (int)glm::floor(nextPlayerBox.min.y - margin);
         int min_z = (int)glm::floor(nextPlayerBox.min.z - margin);
@@ -173,22 +171,22 @@ glm::vec3 resolveXZCollision(glm::vec3 p_nextPlayerPosition, glm::vec3 movement)
                         blockBox.max = glm::vec3(x + BLOCK_SIZE / 2 + gap, y + BLOCK_SIZE / 2, z + BLOCK_SIZE / 2);
                         blockBox.min = glm::vec3(x - BLOCK_SIZE / 2 - gap, y - BLOCK_SIZE / 2, z - BLOCK_SIZE / 2);
                         if (boxesOverlap(nextPlayerBox, blockBox)) {
-                            if (movement.x > 0) { // Moving right
+                            if (p_velocity.x > 0) { // Moving right
                                 p_nextPlayerPosition.x = blockBox.min.x - playerWidth / 2;
                             } else { // Moving left
                                 p_nextPlayerPosition.x = blockBox.max.x + playerWidth / 2;
                             }
-                            break; // breaking cause at a time we can only have one collisoin along an axis, which is the closest to the player same for z
+                            goto resolve_z; // Move to Z resolution, cause at a time we can only have one collisoin along an axis, which is the closest to the player same for z
                         }
-
                     }
                 }
             }
         }
     }
 
+resolve_z:
     // Resolve Z-axis collision
-    if (movement.z != 0) {
+    if (p_velocity.z != 0) {
         nextPlayerBox.max.x = p_nextPlayerPosition.x + (playerWidth / 2);
         nextPlayerBox.min.x = p_nextPlayerPosition.x - (playerWidth / 2);
         nextPlayerBox.max.y = playerPosition.y + playerHeight;
@@ -211,12 +209,12 @@ glm::vec3 resolveXZCollision(glm::vec3 p_nextPlayerPosition, glm::vec3 movement)
                         blockBox.max = glm::vec3(x + BLOCK_SIZE / 2, y + BLOCK_SIZE / 2, z + BLOCK_SIZE / 2 + gap);
                         blockBox.min = glm::vec3(x - BLOCK_SIZE / 2, y - BLOCK_SIZE / 2, z - BLOCK_SIZE / 2 - gap);
                         if (boxesOverlap(nextPlayerBox, blockBox)) {
-                            if (movement.z > 0) { // Moving down
+                           if (p_velocity.z > 0) { // Moving forward
                                 p_nextPlayerPosition.z = blockBox.min.z - playerDepth / 2;
-                            } else { // Moving up
+                            } else { // Moving backward
                                 p_nextPlayerPosition.z = blockBox.max.z + playerDepth / 2;
                             }
-                            break;
+                            goto end_resolve; // End resolution
                         }
                     }
                 }
@@ -224,8 +222,10 @@ glm::vec3 resolveXZCollision(glm::vec3 p_nextPlayerPosition, glm::vec3 movement)
         }
     }
 
+end_resolve:
     return p_nextPlayerPosition;
 }
+
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
@@ -322,7 +322,6 @@ void processInput(GLFWwindow* window){
     // jump
     spaceIsPressed = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
     if( spaceIsPressed && !spaceWasPressed && onGround){
-        std::cout << "Jumping!" << std::endl;     
         velocity += jumpVelocity;
         onGround = false;
     }
