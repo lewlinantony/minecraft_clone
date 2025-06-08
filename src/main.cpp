@@ -19,13 +19,13 @@ const int SCREEN_WIDTH = 800;
 const int SCREEN_HEIGHT = 600;
 const float BLOCK_SIZE = 1.0f; 
 const float COLLISION_THRESHOLD = 0.2f;
-const float terrainSize = 61.0f;
+const float TERRAIN_SIZE = 61.0f;
 
 // Physics constants
 const float gravity = 30.0f;
 const float jumpVelocity = 9.0f;
 const float cameraSpeed = 10.0f;
-const float MOUSE_SENSITIVITY = 0.1f;
+const float mosueSensitivity = 0.1f;
 
 // Player dimensions
 const float playerWidth = 0.6f;
@@ -79,6 +79,11 @@ struct BoundingBox {
 };
 BoundingBox nextPlayerBox;
 
+// Raycasting constants
+const float rayStart = 0.1f;
+const float rayEnd = 5.0f;
+const float rayStep = 0.05f;
+glm::ivec3 selectedBlock; // Currently selected block 
 
 // Hash function for glm::ivec3
 namespace std {
@@ -96,18 +101,27 @@ namespace std {
 // Block map
 std::unordered_map<glm::ivec3, bool> blockMap; // Map to store blocks in the world
 
+
 // Function declarations
-bool boxesOverlap(BoundingBox playerBox, BoundingBox blockBox);
+bool boxBoxOverlap(BoundingBox playerBox, BoundingBox blockBox);
+bool pointBoxOverlap(glm::vec3 point, BoundingBox box);
 glm::vec3 resolveYCollision(glm::vec3& p_nextPlayerPosition, glm::vec3 y_movement);
 glm::vec3 resolveXZCollision(glm::vec3 p_nextPlayerPosition, glm::vec3 p_velocity);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void processInput(GLFWwindow* window);
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
+void renderImGui();
 
-bool boxesOverlap(BoundingBox playerBox, BoundingBox blockBox){
+bool boxBoxOverlap(BoundingBox playerBox, BoundingBox blockBox){
     return ((playerBox.min.x <= blockBox.max.x && playerBox.max.x >= blockBox.min.x) and
             (playerBox.min.y <= blockBox.max.y && playerBox.max.y >= blockBox.min.y) and
             (playerBox.min.z <= blockBox.max.z && playerBox.max.z >= blockBox.min.z));    
+}
+
+bool pointBoxOverlap(glm::vec3 point, BoundingBox box) {
+    return (point.x >= box.min.x && point.x <= box.max.x &&
+            point.y >= box.min.y && point.y <= box.max.y &&
+            point.z >= box.min.z && point.z <= box.max.z);
 }
 
 glm::vec3 resolveYCollision(glm::vec3& p_nextPlayerPosition, glm::vec3 y_movement) {
@@ -138,7 +152,7 @@ glm::vec3 resolveYCollision(glm::vec3& p_nextPlayerPosition, glm::vec3 y_movemen
                     BoundingBox blockBox;
                     blockBox.max = glm::vec3(x + BLOCK_SIZE/2, y + BLOCK_SIZE/2 + gap, z + BLOCK_SIZE/2); 
                     blockBox.min = glm::vec3(x - BLOCK_SIZE/2, y - BLOCK_SIZE/2 - gap, z - BLOCK_SIZE/2);
-                    if (boxesOverlap(nextPlayerBox, blockBox)){
+                    if (boxBoxOverlap(nextPlayerBox, blockBox)){
                         velocity = 0.0f;
                         if (y_movement.y > 0) {  // Moving Down
                             p_nextPlayerPosition.y = blockBox.min.y - playerHeight;
@@ -181,7 +195,7 @@ glm::vec3 resolveXZCollision(glm::vec3 p_nextPlayerPosition, glm::vec3 p_velocit
                         BoundingBox blockBox;
                         blockBox.max = glm::vec3(x + BLOCK_SIZE / 2 + gap, y + BLOCK_SIZE / 2, z + BLOCK_SIZE / 2);
                         blockBox.min = glm::vec3(x - BLOCK_SIZE / 2 - gap, y - BLOCK_SIZE / 2, z - BLOCK_SIZE / 2);
-                        if (boxesOverlap(nextPlayerBox, blockBox)) {
+                        if (boxBoxOverlap(nextPlayerBox, blockBox)) {
                             if (p_velocity.x > 0) { // Moving right
                                 p_nextPlayerPosition.x = blockBox.min.x - playerWidth / 2;
                             } else { // Moving left
@@ -219,7 +233,7 @@ resolve_z:
                         BoundingBox blockBox;
                         blockBox.max = glm::vec3(x + BLOCK_SIZE / 2, y + BLOCK_SIZE / 2, z + BLOCK_SIZE / 2 + gap);
                         blockBox.min = glm::vec3(x - BLOCK_SIZE / 2, y - BLOCK_SIZE / 2, z - BLOCK_SIZE / 2 - gap);
-                        if (boxesOverlap(nextPlayerBox, blockBox)) {
+                        if (boxBoxOverlap(nextPlayerBox, blockBox)) {
                            if (p_velocity.z > 0) { // Moving forward
                                 p_nextPlayerPosition.z = blockBox.min.z - playerDepth / 2;
                             } else { // Moving backward
@@ -249,8 +263,8 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos){
     lastX = xpos;
     lastY = ypos;
 
-    xoffset *= MOUSE_SENSITIVITY;
-    yoffset *= MOUSE_SENSITIVITY;
+    xoffset *= mosueSensitivity;
+    yoffset *= mosueSensitivity;
 
     yaw += xoffset;
     pitch += yoffset;
@@ -285,7 +299,7 @@ void processInput(GLFWwindow* window){
     front = glm::normalize(front);
     glm::vec3 right = glm::normalize(glm::cross(front, cameraUp));
 
-    //nerf movement on air
+    //nerf movement in air
     if (onGround){
         MOVE_SCALE = 1.0f;
     }
@@ -339,6 +353,31 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height){
     glViewport(0, 0, width, height);
 } 
 
+void renderImGui() {
+    // ImGui setup
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    // Player Info Window
+    ImGui::Begin("Player Info");
+    ImGui::Text("Position: %.2f, %.2f, %.2f", playerPosition.x, playerPosition.y, playerPosition.z);
+    ImGui::Text("On Ground: %s", onGround ? "Yes" : "No");
+    ImGui::Text("Velocity: %.2f", velocity);
+    if (ImGui::Button("Reset Position")) {
+        playerPosition = glm::vec3(0.0f, 5.0f, 0.0f);
+        velocity = 0.0f;
+        onGround = false;
+    }
+
+    ImGui::Text("Selected Block: (%d, %d, %d)", selectedBlock.x, selectedBlock.y, selectedBlock.z);
+
+    ImGui::End();
+
+    // Render ImGui
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
 
 int main(){
     // Initialize GLFW
@@ -438,16 +477,16 @@ int main(){
     noise.SetSeed(1337);
     noise.SetFrequency(0.05f);
     
-    for (unsigned int x = 0; x < terrainSize; x++) {
-        for (unsigned int z = 0; z < terrainSize; z++) {
+    for (unsigned int x = 0; x < TERRAIN_SIZE; x++) {
+        for (unsigned int z = 0; z < TERRAIN_SIZE; z++) {
             for (int y = -2; y < 4; y++) {  
                 float height = noise.GetNoise((float)x, (float)z); 
                 height = glm::round(height);
                 glm::vec3 blockPosition;
                 if (y==height)
-                    blockPosition = glm::vec3((float)z - (terrainSize-1)/2.0f, height, (float)x - (terrainSize-1)/2.0f);
+                    blockPosition = glm::vec3((float)z - (TERRAIN_SIZE-1)/2.0f, height, (float)x - (TERRAIN_SIZE-1)/2.0f);
                 else if (y < height) {
-                    blockPosition = glm::vec3((float)z - (terrainSize-1)/2.0f, (float)y, (float)x - (terrainSize-1)/2.0f);
+                    blockPosition = glm::vec3((float)z - (TERRAIN_SIZE-1)/2.0f, (float)y, (float)x - (TERRAIN_SIZE-1)/2.0f);
                 }
                 else{
                     continue; // skip if y is above the terrain height
@@ -550,23 +589,19 @@ int main(){
         // Update camera position
         cameraPos = playerPosition + glm::vec3(0.0f, eyeHeight, 0.0f);
 
+        //RayCasting to select blocks
+        glm::vec3 ray = glm::normalize(cameraFront);
+        glm::vec3 rayOrigin = cameraPos;
+        selectedBlock = glm::ivec3(INT_MAX, INT_MAX, INT_MAX); // Reset selected block to an unlikely value
 
-        //imgui stuff
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-
-        ImGui::Begin("Player Info");
-        ImGui::Text("Position: %.2f, %.2f, %.2f", playerPosition.x, playerPosition.y, playerPosition.z);
-        ImGui::Text("On Ground: %s", onGround ? "Yes" : "No");
-        ImGui::Text("Velocity: %.2f", velocity);
-        if (ImGui::Button("Reset Position")) {
-            playerPosition = glm::vec3(0.0f, 5.0f, 0.0f);
-            velocity = 0.0f;
-            onGround = false;
+        for (float i = rayStart; i < rayEnd; i += rayStep) {
+            glm::vec3 point = rayOrigin + ray * i;
+            glm::ivec3 blockPosition = glm::ivec3(glm::round(point));
+            if (blockMap.find(blockPosition) != blockMap.end() and blockMap[blockPosition]) {
+                selectedBlock = blockPosition;
+                break; // Stop when we hit a block
+            }
         }
-        ImGui::End();
-
 
         // Clear the screen
         glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -600,17 +635,17 @@ int main(){
 
                 // Set block type (you can modify this logic as needed)
                 blockType = 0; 
+                if (glm::ivec3(blockPosition) == selectedBlock) {
+                    blockType = 2; 
+                }
                 shader.setInt("blockType", blockType);
 
                 glDrawArrays(GL_TRIANGLES, 0, sizeof(vertices) / sizeof(float));
             }
         }
-
         
         // Render ImGui
-        ImGui::Render();
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
+        renderImGui(); 
 
         // Swap buffers and poll events
         glfwSwapBuffers(window);
