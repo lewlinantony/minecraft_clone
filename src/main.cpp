@@ -18,11 +18,8 @@
 const int SCREEN_WIDTH = 800;
 const int SCREEN_HEIGHT = 600;
 const float BLOCK_SIZE = 1.0f; 
-const float COLLISION_THRESHOLD = 0.2;
-
-// world constants
-float terrainSize = 61.0f; 
-
+const float COLLISION_THRESHOLD = 0.2f;
+const float terrainSize = 61.0f;
 
 // Physics constants
 const float gravity = 30.0f;
@@ -31,67 +28,81 @@ const float cameraSpeed = 10.0f;
 const float MOUSE_SENSITIVITY = 0.1f;
 
 // Player dimensions
-float playerWidth = 0.6;
-float playerDepth = 0.6f;
-float playerHeight = 1.8;
-float eyeHeight = 1.6f;
+const float playerWidth = 0.6f;
+const float playerDepth = 0.6f;
+const float playerHeight = 1.8f;
+const float eyeHeight = 1.6f;
+
+// Collision constants
+const float gap = 0.01f; // Gap to avoid collision issues
+const float margin = 0.5f; // a margin to increase the number of blocks that are checked for collision
+
+// Player state
+float velocity = 0.0f;
+glm::vec3 playerPosition = glm::vec3(0.0f, 10.0f, 0.0f);
+bool onGround = false;
+
+// Camera state
+float yaw = -90.0f;
+float pitch = 0.0f;
+const float MAX_PITCH = 89.0f;
+glm::vec3 cameraPos = playerPosition + glm::vec3(0.0f, eyeHeight, 0.0f);
+glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+glm::vec3 cameraRight;
+
+// Mouse state
+bool firstMouse = true;
+float lastX = SCREEN_WIDTH / 2.0f;
+float lastY = SCREEN_HEIGHT / 2.0f;
+
+// Input state
+bool spaceWasPressed = false;
+bool spaceIsPressed = false;
+bool tabWasPressed = false;
+bool tabIsPressed = false;
+
+// Movement scaling
+float MOVE_SCALE = 0.1f;
+
+// Frame timing
+float deltaTime = 0.0f; // Time between current frame and last frame
+float lastFrame = 0.0f; // Time of last frame
+
+// Uniforms
+int blockType;
 
 // Player bounding box
-struct BoundingBox{
+struct BoundingBox {
     glm::vec3 max;
     glm::vec3 min;
 };
 BoundingBox nextPlayerBox;
 
 
-// Hash function for glm::ivec3 
+// Hash function for glm::ivec3
 namespace std {
     template<>
     struct hash<glm::ivec3> {
         std::size_t operator()(const glm::ivec3& v) const noexcept {
-
             std::size_t hx = std::hash<int>()(v.x);
             std::size_t hy = std::hash<int>()(v.y);
             std::size_t hz = std::hash<int>()(v.z);
-            
             return hx ^ (hy << 1) ^ (hz << 2);
         }
     };
 }
-std::unordered_map<glm::ivec3, bool> blockMap; // map to store blocks in the world
 
-// Player state
-float velocity = 0.0f;
-glm::vec3 playerPosition    = glm::vec3(0.0f, 10.0f, 0.0f);
-bool onGround = false;
+// Block map
+std::unordered_map<glm::ivec3, bool> blockMap; // Map to store blocks in the world
 
-
-// Camera state
-float yaw = -90.0f;
-float pitch = 0.0f;
-glm::vec3 cameraPos         = playerPosition + glm::vec3(0.0f, eyeHeight, 0.0f);
-glm::vec3 cameraFront       = glm::vec3(0.0f, 0.0f, -1.0f);
-glm::vec3 cameraUp          = glm::vec3(0.0f, 1.0f,  0.0f);
-glm::vec3 cameraRight;
-
-// Mouse state
-bool firstMouse = true;
-bool spaceWasPressed = false;
-bool spaceIsPressed = false;
-bool tabWasPressed = false;
-bool tabIsPressed = false;
-float lastX = SCREEN_WIDTH/2;
-float lastY = SCREEN_HEIGHT/2;
-float MOVE_SCALE = 0.1f; 
-
-// Frame timing
-float deltaTime = 0.0f; // Time between current frame and last frame
-float lastFrame = 0.0f; // Time of last frame
-
-//Uniforms
-int blockType;
-float gap = 0.01; // gap between player and block during to avoid collision issues
-float margin = 0.5f; // constant to grab blocks around the player for collision detection
+// Function declarations
+bool boxesOverlap(BoundingBox playerBox, BoundingBox blockBox);
+glm::vec3 resolveYCollision(glm::vec3& p_nextPlayerPosition, glm::vec3 y_movement);
+glm::vec3 resolveXZCollision(glm::vec3 p_nextPlayerPosition, glm::vec3 p_velocity);
+void mouse_callback(GLFWwindow* window, double xpos, double ypos);
+void processInput(GLFWwindow* window);
+void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 
 bool boxesOverlap(BoundingBox playerBox, BoundingBox blockBox){
     return ((playerBox.min.x <= blockBox.max.x && playerBox.max.x >= blockBox.min.x) and
@@ -226,12 +237,6 @@ end_resolve:
     return p_nextPlayerPosition;
 }
 
-
-void framebuffer_size_callback(GLFWwindow* window, int width, int height)
-{
-    glViewport(0, 0, width, height);
-} 
-
 void mouse_callback(GLFWwindow* window, double xpos, double ypos){
     if(firstMouse){
         lastX = xpos;
@@ -250,10 +255,12 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos){
     yaw += xoffset;
     pitch += yoffset;
 
-    if(pitch > 89.0f)
-        pitch = 89.0f;
-    if(pitch < -89.0f)
-        pitch = -89.0f;
+    if(pitch > MAX_PITCH){
+        pitch = MAX_PITCH;
+    }
+    if(pitch < -MAX_PITCH){
+        pitch = -MAX_PITCH;
+    }
         
     glm::vec3 direction;
     direction.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
@@ -328,6 +335,10 @@ void processInput(GLFWwindow* window){
     spaceWasPressed = spaceIsPressed;
 }
 
+void framebuffer_size_callback(GLFWwindow* window, int width, int height){
+    glViewport(0, 0, width, height);
+} 
+
 
 int main(){
     // Initialize GLFW
@@ -350,8 +361,7 @@ int main(){
     glfwMakeContextCurrent(window);
 
     // Initialize GLAD
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-    {
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)){
         std::cout << "Failed to initialize GLAD" << std::endl;
         return -1;
     }  
@@ -433,16 +443,16 @@ int main(){
             for (int y = -2; y < 4; y++) {  
                 float height = noise.GetNoise((float)x, (float)z); 
                 height = glm::round(height);
-                glm::vec3 Pos;
+                glm::vec3 blockPosition;
                 if (y==height)
-                    Pos = glm::vec3((float)z - (terrainSize-1)/2.0f, height, (float)x - (terrainSize-1)/2.0f);
+                    blockPosition = glm::vec3((float)z - (terrainSize-1)/2.0f, height, (float)x - (terrainSize-1)/2.0f);
                 else if (y < height) {
-                    Pos = glm::vec3((float)z - (terrainSize-1)/2.0f, (float)y, (float)x - (terrainSize-1)/2.0f);
+                    blockPosition = glm::vec3((float)z - (terrainSize-1)/2.0f, (float)y, (float)x - (terrainSize-1)/2.0f);
                 }
                 else{
                     continue; // skip if y is above the terrain height
                 }
-                glm::ivec3 key = glm::ivec3(glm::floor(Pos));
+                glm::ivec3 key = glm::ivec3(glm::floor(blockPosition));
                 blockMap[key] = true;
             }
         }
@@ -583,8 +593,8 @@ int main(){
             if (block.second) { // Check if the block exists
 
                 glm::mat4 model = glm::mat4(1.0f);
-                glm::vec3 Pos = glm::vec3(block.first); // Get position from blockMap key
-                model = glm::translate(model, Pos);
+                glm::vec3 blockPosition = glm::vec3(block.first); // Get position from blockMap key
+                model = glm::translate(model, blockPosition);
 
                 shader.setMat4("model", model);
 
