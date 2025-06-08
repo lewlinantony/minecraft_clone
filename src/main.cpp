@@ -203,7 +203,6 @@ glm::vec3 resolveXZCollision(glm::vec3 p_nextPlayerPosition, glm::vec3 movement)
         int min_y = (int)glm::floor(nextPlayerBox.min.y - margin);
         int min_z = (int)glm::floor(nextPlayerBox.min.z - margin);
 
-
         for (int x = min_x; x < max_x; x++) {
             for (int y = min_y; y < max_y; y++) {
                 for (int z = min_z; z < max_z; z++) {
