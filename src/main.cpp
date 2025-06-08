@@ -61,8 +61,10 @@ bool spaceWasPressed = false;
 bool spaceIsPressed = false;
 bool tabWasPressed = false;
 bool tabIsPressed = false;
-bool mouseLeftIsPressed = false; // Added declaration for mouseLeftIsPressed
-bool mouseLeftWasPressed = false; // Added declaration for mouseLeftWasPressed
+bool mouseLeftIsPressed = false;
+bool mouseLeftWasPressed = false;
+bool mouseRightIsPressed = false;
+bool mouseRightWasPressed = false;
 
 // Movement scaling
 float MOVE_SCALE = 0.1f;
@@ -84,8 +86,9 @@ BoundingBox nextPlayerBox;
 // Raycasting constants
 const float rayStart = 0.1f;
 const float rayEnd = 5.0f;
-const float rayStep = 0.05f;
+const float rayStep = 0.1f;
 glm::ivec3 selectedBlock; // Currently selected block 
+glm::ivec3 previousBlock; // Previously selected block
 
 // Hash function for glm::ivec3
 namespace std {
@@ -350,11 +353,18 @@ void processInput(GLFWwindow* window){
     }
     spaceWasPressed = spaceIsPressed;
 
+
     mouseLeftIsPressed = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
     if ( mouseLeftIsPressed && !mouseLeftWasPressed && selectedBlock != glm::ivec3(INT_MAX, INT_MAX, INT_MAX) ) {
         blockMap.erase(selectedBlock);
     }
     mouseLeftWasPressed = mouseLeftIsPressed;
+
+    mouseRightIsPressed = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
+    if ( mouseRightIsPressed && !mouseRightWasPressed && previousBlock != glm::ivec3(INT_MAX, INT_MAX, INT_MAX) && selectedBlock != glm::ivec3(INT_MAX, INT_MAX, INT_MAX) ) {
+        blockMap[previousBlock] = true; 
+    }
+    mouseRightWasPressed = mouseRightIsPressed;
 
 }
 
@@ -380,6 +390,7 @@ void renderImGui() {
     }
 
     ImGui::Text("Selected Block: (%d, %d, %d)", selectedBlock.x, selectedBlock.y, selectedBlock.z);
+    ImGui::Text("Previous Block: (%d, %d, %d)", previousBlock.x, previousBlock.y, previousBlock.z);
 
     ImGui::End();
 
@@ -602,15 +613,33 @@ int main(){
         glm::vec3 rayDirection = glm::normalize(cameraFront); //unit vector in the direction of the camera
         glm::vec3 rayOrigin = cameraPos;
         selectedBlock = glm::ivec3(INT_MAX, INT_MAX, INT_MAX); // Reset selected block to an unlikely value
+        previousBlock = glm::ivec3(INT_MAX, INT_MAX, INT_MAX); // Reset previous block to an unlikely value
 
         for (float i = rayStart; i < rayEnd; i += rayStep) {
             glm::vec3 point = rayOrigin + rayDirection * i; 
             glm::ivec3 blockPosition = glm::ivec3(glm::round(point));
-            if (blockMap.find(blockPosition) != blockMap.end() and blockMap[blockPosition]) {
+            if (blockMap.find(blockPosition) != blockMap.end() && blockMap[blockPosition]) {
                 selectedBlock = blockPosition;
+                std::cout << "Player Position: (" 
+                          << playerPosition.x << ", " 
+                          << playerPosition.y << ", " 
+                          << playerPosition.z << ")" << std::endl;
+                std::cout << "Player Position Block: (" 
+                          << (int)(playerPosition.x - 0.0f) << ", " 
+                          << (int)(playerPosition.y - ((BLOCK_SIZE / 2) - gap)) << ", " 
+                          << (int)(playerPosition.z - 0.0f) << ")" << std::endl;
+                std::cout << "Previous Block: (" 
+                          << previousBlock.x << ", " 
+                          << previousBlock.y << ", " 
+                          << previousBlock.z << ")" << std::endl;
+                if (previousBlock == glm::ivec3(glm::round(playerPosition))) {
+                    previousBlock = glm::ivec3(INT_MAX, INT_MAX, INT_MAX); 
+                }
                 break; // Stop when we hit a block
             }
+            previousBlock = blockPosition;            
         }
+        std::cout << "\n";
 
         // Clear the screen
         glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -646,6 +675,9 @@ int main(){
                 blockType = 0; 
                 if (glm::ivec3(blockPosition) == selectedBlock) {
                     blockType = 2; 
+                }
+                if (glm::ivec3(blockPosition) == previousBlock) {
+                    blockType = 1; 
                 }
                 shader.setInt("blockType", blockType);
 
