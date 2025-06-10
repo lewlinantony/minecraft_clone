@@ -7,6 +7,7 @@ in float FaceID;
 
 uniform sampler2D text;
 uniform int blockType;
+uniform bool selectedBlock;
 
 void main()
 {
@@ -55,8 +56,21 @@ void main()
         borderFactor = mix(borderDarkness, 1.0, distFromEdge/borderWidth); // linearly interpolate it with distFromEdge/borderWidth as the scale that determines how darked it is
     }
     
+
     // Apply the border darkening
     texColor.rgb *= borderFactor;
+
+    float brightness;
+
+    if (selectedBlock){
+        brightness = 1.2f;
+    }
+    else{
+        brightness = 1.0f;
+    }
+
+    //Apply the brightness
+    texColor.rgb *= brightness;
 
     FragColor = texColor;
 }

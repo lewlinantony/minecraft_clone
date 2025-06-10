@@ -674,10 +674,10 @@ int main(){
                 // Set block type (you can modify this logic as needed)
                 blockType = 0; 
                 if (glm::ivec3(blockPosition) == selectedBlock) {
-                    blockType = 2; 
+                    shader.setBool("selectedBlock", true);
                 }
-                if (glm::ivec3(blockPosition) == previousBlock) {
-                    blockType = 1; 
+                else{
+                    shader.setBool("selectedBlock", false);
                 }
                 shader.setInt("blockType", blockType);
 
