@@ -126,6 +126,7 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void processInput(GLFWwindow* window);
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void renderImGui();
+void rayCast(glm::vec3 cameraFront);
 
 bool boxBoxOverlap(BoundingBox playerBox, BoundingBox blockBox){
     return ((playerBox.min.x <= blockBox.max.x && playerBox.max.x >= blockBox.min.x) and
@@ -436,6 +437,54 @@ void renderImGui() {
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
+void rayCast(glm::vec3 cameraFront){
+        // RayCasting to select blocks
+        glm::vec3 rayDirection = glm::normalize(cameraFront); // unit vector in the direction of the camera
+        glm::vec3 rayOrigin = cameraPos;
+     
+        float closestHit = rayEnd;
+        glm::ivec3 bestHit = glm::ivec3(INT_MAX);
+        glm::ivec3 bestPrev = glm::ivec3(INT_MAX);
+
+        
+        for (const auto& offset : rayStarts) {
+            glm::vec3 curRayOrigin = rayOrigin + offset; // Adjust ray start based on offset
+            glm::ivec3 prevBlockThisRay = glm::ivec3(INT_MAX); // Reset previous block to an unlikely value
+            for (float i = rayStart; i < rayEnd; i += rayStep) {
+                glm::vec3 point = curRayOrigin + rayDirection * i; 
+                glm::ivec3 blockPosition = glm::ivec3(glm::round(point));
+                if (blockMap.find(blockPosition) != blockMap.end() && blockMap[blockPosition]) {
+                    if (i < closestHit){
+                        closestHit = i; 
+                        bestHit = blockPosition;
+
+                        //cannot place on player position Block
+                        if (prevBlockThisRay != glm::ivec3(glm::round(playerPosition))){
+                            bestPrev = prevBlockThisRay; // Store the previous block position
+                        }
+                        else {
+                            bestPrev = glm::ivec3(INT_MAX); 
+                        }
+
+                        // Stop when we hit a block                        
+                        break; 
+                    }
+                }
+                prevBlockThisRay = blockPosition;            
+            }
+        }
+        selectedBlock = bestHit;
+        previousBlock = bestPrev;
+
+        // The closest Block could still not be face alligned, So check its manhatten distance to the previous block
+        glm::ivec3 delta = selectedBlock - previousBlock;
+
+        // check if manhattan distance is 1 to ensure block is face alligned
+        if (abs(delta.x) + abs(delta.y) + abs(delta.z) != 1) {
+            previousBlock = glm::ivec3(INT_MAX); // Invalid for placement
+        }        
+}
+
 int main(){
     // Initialize GLFW
     glfwInit();
@@ -649,44 +698,8 @@ int main(){
 
         // Update camera position
         cameraPos = playerPosition + glm::vec3(0.0f, eyeHeight, 0.0f);
-
-        // RayCasting to select blocks
-        glm::vec3 rayDirection = glm::normalize(cameraFront); // unit vector in the direction of the camera
-        glm::vec3 rayOrigin = cameraPos;
-     
-        float closestHit = rayEnd;
-        glm::ivec3 bestHit = glm::ivec3(INT_MAX);
-        glm::ivec3 bestPrev = glm::ivec3(INT_MAX);
         
-        for (const auto& offset : rayStarts) {
-            glm::vec3 curRayOrigin = rayOrigin + offset; // Adjust ray start based on offset
-            previousBlock = glm::ivec3(INT_MAX); // Reset previous block to an unlikely value
-            for (float i = rayStart; i < rayEnd; i += rayStep) {
-                glm::vec3 point = curRayOrigin + rayDirection * i; 
-                glm::ivec3 blockPosition = glm::ivec3(glm::round(point));
-                if (blockMap.find(blockPosition) != blockMap.end() && blockMap[blockPosition]) {
-                    if (i < closestHit){
-                        closestHit = i; 
-                        bestHit = blockPosition;
-
-                        //cannot place on player position Block
-                        if (previousBlock != glm::ivec3(glm::round(playerPosition))){
-                            bestPrev = previousBlock; // Store the previous block position
-                        }
-                        else {
-                            bestPrev = glm::ivec3(INT_MAX); 
-                        }
-
-                        // Stop when we hit a block                        
-                        break; 
-                    }
-                }
-                previousBlock = blockPosition;            
-            }
-        }
-        selectedBlock = bestHit;
-        previousBlock = bestPrev;
-
+        rayCast(cameraFront);
 
         // Clear the screen
         glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
