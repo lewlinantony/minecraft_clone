@@ -41,6 +41,7 @@ const float margin = 0.5f; // a margin to increase the number of blocks that are
 float velocity = 0.0f;
 glm::vec3 playerPosition = glm::vec3(0.0f, 10.0f, 0.0f);
 bool onGround = false;
+bool CreativeMode = false; 
 
 // Camera state
 float yaw = -90.0f;
@@ -85,7 +86,7 @@ BoundingBox nextPlayerBox;
 
 // Raycasting constants
 const float rayStart = 0.1f;
-const float rayEnd = 5.0f;
+const float rayEnd = 3.0f;
 const float rayStep = 0.1f;
 glm::ivec3 selectedBlock; // Currently selected block 
 glm::ivec3 previousBlock; // Previously selected block
@@ -344,27 +345,43 @@ void processInput(GLFWwindow* window){
 
     nextPlayerPosition = playerPosition + xz_movement;
     playerPosition = resolveXZCollision(nextPlayerPosition, xz_movement);
-    
-    // jump
-    spaceIsPressed = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
-    if( spaceIsPressed && !spaceWasPressed && onGround){
-        velocity += jumpVelocity;
-        onGround = false;
-    }
-    spaceWasPressed = spaceIsPressed;
 
-
+    // block removal
     mouseLeftIsPressed = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
     if ( mouseLeftIsPressed && !mouseLeftWasPressed && selectedBlock != glm::ivec3(INT_MAX, INT_MAX, INT_MAX) ) {
         blockMap.erase(selectedBlock);
     }
     mouseLeftWasPressed = mouseLeftIsPressed;
 
+    // block placement
     mouseRightIsPressed = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
     if ( mouseRightIsPressed && !mouseRightWasPressed && previousBlock != glm::ivec3(INT_MAX, INT_MAX, INT_MAX) && selectedBlock != glm::ivec3(INT_MAX, INT_MAX, INT_MAX) ) {
         blockMap[previousBlock] = true; 
     }
     mouseRightWasPressed = mouseRightIsPressed;
+
+    if(!CreativeMode){
+        // jump
+        spaceIsPressed = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
+        if( spaceIsPressed && !spaceWasPressed && onGround){
+            velocity += jumpVelocity;
+            onGround = false;
+        }
+        spaceWasPressed = spaceIsPressed;        
+    }
+    else{
+        //creative mode movement
+        glm::vec3 nextPlayerPosition = playerPosition;
+        glm::vec3 y_movement = glm::vec3(0.0f); 
+        if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
+            y_movement.y += speed;
+        }
+        if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
+            y_movement.y -= speed;
+        }
+        nextPlayerPosition = playerPosition + y_movement;
+        playerPosition = resolveYCollision(nextPlayerPosition, y_movement);        
+    }
 
 }
 
@@ -389,8 +406,19 @@ void renderImGui() {
         onGround = false;
     }
 
-    ImGui::Text("Selected Block: (%d, %d, %d)", selectedBlock.x, selectedBlock.y, selectedBlock.z);
-    ImGui::Text("Previous Block: (%d, %d, %d)", previousBlock.x, previousBlock.y, previousBlock.z);
+    if (selectedBlock == glm::ivec3(INT_MAX, INT_MAX, INT_MAX)) {
+        ImGui::Text("Selected Block: None");
+    } else {
+        ImGui::Text("Selected Block: (%d, %d, %d)", selectedBlock.x, selectedBlock.y, selectedBlock.z);
+    }
+
+    if (previousBlock == glm::ivec3(INT_MAX, INT_MAX, INT_MAX)) {
+        ImGui::Text("Previous Block: None");
+    } else {
+        ImGui::Text("Previous Block: (%d, %d, %d)", previousBlock.x, previousBlock.y, previousBlock.z);
+    }
+
+    ImGui::Checkbox("Creative Mode", &CreativeMode);
 
     ImGui::End();
 
@@ -599,12 +627,19 @@ int main(){
         processInput(window);
 
         // plater state update
-        if(!onGround) {
-            velocity -= gravity * deltaTime;
+        if(!CreativeMode){
+            if(!onGround) {
+                velocity -= gravity * deltaTime;
+                if (velocity < -50.0f) { // Clip the lower value of velocity
+                    velocity = -50.0f;
+                }
+            }
+            glm::vec3 y_movement = glm::vec3(0.0f, velocity * deltaTime, 0.0f); // vertical movement
+            glm::vec3 nextPlayerPosition = playerPosition + y_movement;
+            playerPosition = resolveYCollision(nextPlayerPosition, y_movement);            
         }
-        glm::vec3 y_movement = glm::vec3(0.0f, velocity * deltaTime, 0.0f); // vertical movement
-        glm::vec3 nextPlayerPosition = playerPosition + y_movement;
-        playerPosition = resolveYCollision(nextPlayerPosition, y_movement);
+
+
 
         // Update camera position
         cameraPos = playerPosition + glm::vec3(0.0f, eyeHeight, 0.0f);
@@ -618,20 +653,10 @@ int main(){
         for (float i = rayStart; i < rayEnd; i += rayStep) {
             glm::vec3 point = rayOrigin + rayDirection * i; 
             glm::ivec3 blockPosition = glm::ivec3(glm::round(point));
+            
             if (blockMap.find(blockPosition) != blockMap.end() && blockMap[blockPosition]) {
                 selectedBlock = blockPosition;
-                std::cout << "Player Position: (" 
-                          << playerPosition.x << ", " 
-                          << playerPosition.y << ", " 
-                          << playerPosition.z << ")" << std::endl;
-                std::cout << "Player Position Block: (" 
-                          << (int)(playerPosition.x - 0.0f) << ", " 
-                          << (int)(playerPosition.y - ((BLOCK_SIZE / 2) - gap)) << ", " 
-                          << (int)(playerPosition.z - 0.0f) << ")" << std::endl;
-                std::cout << "Previous Block: (" 
-                          << previousBlock.x << ", " 
-                          << previousBlock.y << ", " 
-                          << previousBlock.z << ")" << std::endl;
+                //cannot place on player position Block
                 if (previousBlock == glm::ivec3(glm::round(playerPosition))) {
                     previousBlock = glm::ivec3(INT_MAX, INT_MAX, INT_MAX); 
                 }
@@ -639,7 +664,6 @@ int main(){
             }
             previousBlock = blockPosition;            
         }
-        std::cout << "\n";
 
         // Clear the screen
         glClearColor(1.0f, 1.0f, 1.0f, 1.0f);

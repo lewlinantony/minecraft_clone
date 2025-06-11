@@ -63,7 +63,7 @@ void main()
     float brightness;
 
     if (selectedBlock){
-        brightness = 1.2f;
+        brightness = 0.8f;
     }
     else{
         brightness = 1.0f;
