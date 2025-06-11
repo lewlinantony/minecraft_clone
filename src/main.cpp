@@ -86,7 +86,7 @@ BoundingBox nextPlayerBox;
 
 // Raycasting constants
 const float rayStart = 0.1f;
-const float rayEnd = 3.0f;
+const float rayEnd = 4.0f;
 const float rayStep = 0.1f;
 glm::ivec3 selectedBlock; // Currently selected block 
 glm::ivec3 previousBlock; // Previously selected block
@@ -454,10 +454,11 @@ int main(){
     }  
 
     // Configure viewport
-    int width, height;
-    glfwGetFramebufferSize(window, &width, &height);
-    glViewport(0, 0, width, height);
+    // int width, height;
+    // glfwGetFramebufferSize(window, &width, &height);
+    // glViewport(0, 0, width, height);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
@@ -639,8 +640,6 @@ int main(){
             playerPosition = resolveYCollision(nextPlayerPosition, y_movement);            
         }
 
-
-
         // Update camera position
         cameraPos = playerPosition + glm::vec3(0.0f, eyeHeight, 0.0f);
 
@@ -672,13 +671,18 @@ int main(){
         // Use shader
         shader.use();
 
+
+        // Update viewport size
+        int curWidth, curHeight;
+        glfwGetFramebufferSize(window, &curWidth, &curHeight);        
+
         // Set uniforms
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, text1);        
     
         glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp); // in vectors, dir = target - pos | target = pos + dir
         shader.setMat4("view", view);
-        glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)SCREEN_WIDTH/SCREEN_HEIGHT, 0.1f, 100.0f);
+        glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)curWidth/(float)curHeight, 0.1f, 100.0f);
         shader.setMat4("projection", projection);
 
 
