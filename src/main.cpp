@@ -90,6 +90,15 @@ const float rayEnd = 4.0f;
 const float rayStep = 0.1f;
 glm::ivec3 selectedBlock; // Currently selected block 
 glm::ivec3 previousBlock; // Previously selected block
+std::vector<glm::vec3> rayStarts = { //effectively to thicken the ray so it dosent pass through block edges
+    glm::vec3(0), // center
+    glm::vec3(0.05f, 0, 0),
+    glm::vec3(-0.05f, 0, 0),
+    glm::vec3(0, 0.05f, 0),
+    glm::vec3(0, -0.05f, 0),
+    glm::vec3(0, 0, 0.05f),
+    glm::vec3(0, 0, -0.05f)
+};   
 
 // Hash function for glm::ivec3
 namespace std {
@@ -453,12 +462,10 @@ int main(){
         return -1;
     }  
 
-    // Configure viewport
-    // int width, height;
-    // glfwGetFramebufferSize(window, &width, &height);
-    // glViewport(0, 0, width, height);
+    // set framebuffer size callback function
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     
+    // set mouse callback function
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
@@ -644,25 +651,42 @@ int main(){
         cameraPos = playerPosition + glm::vec3(0.0f, eyeHeight, 0.0f);
 
         // RayCasting to select blocks
-        glm::vec3 rayDirection = glm::normalize(cameraFront); //unit vector in the direction of the camera
+        glm::vec3 rayDirection = glm::normalize(cameraFront); // unit vector in the direction of the camera
         glm::vec3 rayOrigin = cameraPos;
-        selectedBlock = glm::ivec3(INT_MAX, INT_MAX, INT_MAX); // Reset selected block to an unlikely value
-        previousBlock = glm::ivec3(INT_MAX, INT_MAX, INT_MAX); // Reset previous block to an unlikely value
+     
+        float closestHit = rayEnd;
+        glm::ivec3 bestHit = glm::ivec3(INT_MAX);
+        glm::ivec3 bestPrev = glm::ivec3(INT_MAX);
+        
+        for (const auto& offset : rayStarts) {
+            glm::vec3 curRayOrigin = rayOrigin + offset; // Adjust ray start based on offset
+            previousBlock = glm::ivec3(INT_MAX); // Reset previous block to an unlikely value
+            for (float i = rayStart; i < rayEnd; i += rayStep) {
+                glm::vec3 point = curRayOrigin + rayDirection * i; 
+                glm::ivec3 blockPosition = glm::ivec3(glm::round(point));
+                if (blockMap.find(blockPosition) != blockMap.end() && blockMap[blockPosition]) {
+                    if (i < closestHit){
+                        closestHit = i; 
+                        bestHit = blockPosition;
 
-        for (float i = rayStart; i < rayEnd; i += rayStep) {
-            glm::vec3 point = rayOrigin + rayDirection * i; 
-            glm::ivec3 blockPosition = glm::ivec3(glm::round(point));
-            
-            if (blockMap.find(blockPosition) != blockMap.end() && blockMap[blockPosition]) {
-                selectedBlock = blockPosition;
-                //cannot place on player position Block
-                if (previousBlock == glm::ivec3(glm::round(playerPosition))) {
-                    previousBlock = glm::ivec3(INT_MAX, INT_MAX, INT_MAX); 
+                        //cannot place on player position Block
+                        if (previousBlock != glm::ivec3(glm::round(playerPosition))){
+                            bestPrev = previousBlock; // Store the previous block position
+                        }
+                        else {
+                            bestPrev = glm::ivec3(INT_MAX); 
+                        }
+
+                        // Stop when we hit a block                        
+                        break; 
+                    }
                 }
-                break; // Stop when we hit a block
+                previousBlock = blockPosition;            
             }
-            previousBlock = blockPosition;            
         }
+        selectedBlock = bestHit;
+        previousBlock = bestPrev;
+
 
         // Clear the screen
         glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
