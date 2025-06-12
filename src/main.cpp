@@ -12,6 +12,7 @@
 #include <imgui/imgui.h>
 #include <imgui/imgui_impl_glfw.h>
 #include <imgui/imgui_impl_opengl3.h>
+#include <cmath>
 
 
 // Constants
@@ -39,7 +40,7 @@ const float margin = 0.5f; // a margin to increase the number of blocks that are
 
 // Player state
 float velocity = 0.0f;
-glm::vec3 playerPosition = glm::vec3(0.0f, 10.0f, 0.0f);
+glm::vec3 playerPosition = glm::vec3(0.0f, 80.0f, 0.0f);
 bool onGround = false;
 bool CreativeMode = false; 
 
@@ -415,19 +416,8 @@ void renderImGui() {
         velocity = 0.0f;
         onGround = false;
     }
-
-    if (selectedBlock == glm::ivec3(INT_MAX, INT_MAX, INT_MAX)) {
-        ImGui::Text("Selected Block: None");
-    } else {
-        ImGui::Text("Selected Block: (%d, %d, %d)", selectedBlock.x, selectedBlock.y, selectedBlock.z);
-    }
-
-    if (previousBlock == glm::ivec3(INT_MAX, INT_MAX, INT_MAX)) {
-        ImGui::Text("Previous Block: None");
-    } else {
-        ImGui::Text("Previous Block: (%d, %d, %d)", previousBlock.x, previousBlock.y, previousBlock.z);
-    }
-
+    
+    // Creative Mode Toggle
     ImGui::Checkbox("Creative Mode", &CreativeMode);
 
     ImGui::End();
@@ -582,25 +572,32 @@ int main(){
     noise.SetSeed(1337);
     noise.SetFrequency(0.05f);
     
-    for (unsigned int x = 0; x < TERRAIN_SIZE; x++) {
-        for (unsigned int z = 0; z < TERRAIN_SIZE; z++) {
-            for (int y = -2; y < 4; y++) {  
-                float height = noise.GetNoise((float)x, (float)z); 
-                height = glm::round(height);
-                glm::vec3 blockPosition;
-                if (y==height)
-                    blockPosition = glm::vec3((float)z - (TERRAIN_SIZE-1)/2.0f, height, (float)x - (TERRAIN_SIZE-1)/2.0f);
-                else if (y < height) {
-                    blockPosition = glm::vec3((float)z - (TERRAIN_SIZE-1)/2.0f, (float)y, (float)x - (TERRAIN_SIZE-1)/2.0f);
+
+    int radius = TERRAIN_SIZE / 2;
+    glm::ivec3 center = glm::ivec3(0, 0, 0); // or playerPos or wherever
+
+    for (int x = -radius; x <= radius; ++x) {
+        for (int z = -radius; z <= radius; ++z) {
+            for (int y = -2; y < 4; y++) {    
+                if (x*x + z*z <= radius*radius) { // x^2 + z^2 <= r^2 for a circle
+                    float height = noise.GetNoise((float)x, (float)z); 
+                    height = glm::round(height);
+                    glm::vec3 blockPosition;
+                    if (y==height)
+                        blockPosition = glm::vec3((float)z, height, (float)x);
+                    else if (y < height) {
+                        blockPosition = glm::vec3((float)z, (float)y, (float)x);
+                    }
+                    else{
+                        continue; // skip if y is above the terrain height
+                    }                
+                    glm::ivec3 key = center + glm::ivec3(blockPosition); // Center the terrain around the origin
+                    blockMap[key] = true;
                 }
-                else{
-                    continue; // skip if y is above the terrain height
-                }
-                glm::ivec3 key = glm::ivec3(glm::floor(blockPosition));
-                blockMap[key] = true;
             }
         }
     }
+
 
     // Create and compile shaders
     Shader shader("shaders/shader.vert", "shaders/shader.frag");
