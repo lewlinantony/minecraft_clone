@@ -18,7 +18,6 @@ set(SOURCE_FILES
 )
 
 # Create executable
-📈
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
 
 # Create directory structure
