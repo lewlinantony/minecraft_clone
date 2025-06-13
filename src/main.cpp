@@ -40,7 +40,7 @@ const float margin = 0.5f; // a margin to increase the number of blocks that are
 
 // Player state
 float velocity = 0.0f;
-glm::vec3 playerPosition = glm::vec3(0.0f, 60.0f, 0.0f);
+glm::vec3 playerPosition = glm::vec3(0.0f, 10.0f, 0.0f);
 bool onGround = false;
 bool CreativeMode = true; 
 
@@ -164,7 +164,7 @@ glm::vec3 resolveYCollision(glm::vec3& p_nextPlayerPosition, glm::vec3 y_movemen
     for(int x = min_x; x< max_x; x++){
         for(int y = min_y; y< max_y; y++){
             for(int z = min_z; z< max_z; z++){
-                if (blockMap[glm::ivec3(x,y,z)]){
+                if (blockMap.find(glm::ivec3(x, y, z)) != blockMap.end() && blockMap[glm::ivec3(x, y, z)]) { // if i dont do .find = end, and just lookup blockmap[key], and its not present in the map,  apparenlty it will register a as false for that key
                     BoundingBox blockBox;
                     blockBox.max = glm::vec3(x + BLOCK_SIZE/2, y + BLOCK_SIZE/2 + gap, z + BLOCK_SIZE/2); 
                     blockBox.min = glm::vec3(x - BLOCK_SIZE/2, y - BLOCK_SIZE/2 - gap, z - BLOCK_SIZE/2);
@@ -207,7 +207,7 @@ glm::vec3 resolveXZCollision(glm::vec3 p_nextPlayerPosition, glm::vec3 p_velocit
         for (int x = min_x; x < max_x; x++) {
             for (int y = min_y; y < max_y; y++) {
                 for (int z = min_z; z < max_z; z++) {
-                    if (blockMap[glm::ivec3(x, y, z)]) {
+                    if (blockMap.find(glm::ivec3(x, y, z)) != blockMap.end() && blockMap[glm::ivec3(x, y, z)]) {
                         BoundingBox blockBox;
                         blockBox.max = glm::vec3(x + BLOCK_SIZE / 2 + gap, y + BLOCK_SIZE / 2, z + BLOCK_SIZE / 2);
                         blockBox.min = glm::vec3(x - BLOCK_SIZE / 2 - gap, y - BLOCK_SIZE / 2, z - BLOCK_SIZE / 2);
@@ -245,7 +245,7 @@ resolve_z:
         for (int x = min_x; x < max_x; x++) {
             for (int y = min_y; y < max_y; y++) {
                 for (int z = min_z; z < max_z; z++) {
-                    if (blockMap[glm::ivec3(x, y, z)]) {
+                    if (blockMap.find(glm::ivec3(x, y, z)) != blockMap.end() && blockMap[glm::ivec3(x, y, z)]) {
                         BoundingBox blockBox;
                         blockBox.max = glm::vec3(x + BLOCK_SIZE / 2, y + BLOCK_SIZE / 2, z + BLOCK_SIZE / 2 + gap);
                         blockBox.min = glm::vec3(x - BLOCK_SIZE / 2, y - BLOCK_SIZE / 2, z - BLOCK_SIZE / 2 - gap);
@@ -472,6 +472,26 @@ void rayCast(glm::vec3 cameraFront){
         }        
 }
 
+std::vector<int> validFaces(glm::ivec3 block){
+    // Define direction vectors for all 6 directions from a block
+    glm::ivec3 directions[6] = {
+        glm::ivec3(0, 1, 0),    // Top face
+        glm::ivec3(0, 0, -1),   // Front face
+        glm::ivec3(-1, 0, 0),   // Right face
+        glm::ivec3(0, 0, 1),    // Back face
+        glm::ivec3(1, 0, 0),    // Left face
+        glm::ivec3(0, -1, 0)    // Bottom face
+    };
+
+    std::vector<int> visibleFaces;
+    for (int i = 0; i < 6; ++i) {
+        glm::ivec3 neighbor = block + directions[i];
+        if (blockMap.find(neighbor) == blockMap.end() || !blockMap.find(neighbor)->second) {
+            visibleFaces.push_back(i);
+        }
+    }
+    return visibleFaces;
+}
 int main(){
     // Initialize GLFW
     glfwInit();
@@ -524,7 +544,7 @@ int main(){
     };
 
     float frontFace[] = {
-        // Front face (+Z) → faceID = 1
+        // Front face (-Z) → faceID = 1
         -0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 1.0f,
         -0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 1.0f,
          0.5f,  0.5f, -0.5f,  1.0f, 1.0f, 1.0f,
@@ -756,9 +776,10 @@ int main(){
                 }
                 shader.setInt("blockType", blockType);
 
-                for ( int i = 0; i < 6; ++i) {
+
+                for (const auto &i : validFaces(block.first)) {
                     glBindVertexArray(VAOs[i]);
-                    glDrawArrays(GL_TRIANGLES, 0, sizeof(topFace) / sizeof(float));
+                    glDrawArrays(GL_TRIANGLES, 0, 6);
                 }
             }
         }
