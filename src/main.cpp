@@ -20,7 +20,7 @@ const int SCREEN_WIDTH = 800;
 const int SCREEN_HEIGHT = 600;
 const float BLOCK_SIZE = 1.0f; 
 const float COLLISION_THRESHOLD = 0.2f;
-const float TERRAIN_SIZE = 61.0f;
+const float TERRAIN_SIZE = 121.0f;
 
 // Physics constants
 const float gravity = 30.0f;
@@ -40,9 +40,9 @@ const float margin = 0.5f; // a margin to increase the number of blocks that are
 
 // Player state
 float velocity = 0.0f;
-glm::vec3 playerPosition = glm::vec3(0.0f, 80.0f, 0.0f);
+glm::vec3 playerPosition = glm::vec3(0.0f, 60.0f, 0.0f);
 bool onGround = false;
-bool CreativeMode = false; 
+bool CreativeMode = true; 
 
 // Camera state
 float yaw = -90.0f;
@@ -116,7 +116,6 @@ namespace std {
 
 // Block map
 std::unordered_map<glm::ivec3, bool> blockMap; // Map to store blocks in the world
-
 
 // Function declarations
 bool boxBoxOverlap(BoundingBox playerBox, BoundingBox blockBox);
@@ -411,14 +410,12 @@ void renderImGui() {
     ImGui::Text("Position: %.2f, %.2f, %.2f", playerPosition.x, playerPosition.y, playerPosition.z);
     ImGui::Text("On Ground: %s", onGround ? "Yes" : "No");
     ImGui::Text("Velocity: %.2f", velocity);
-    if (ImGui::Button("Reset Position")) {
-        playerPosition = glm::vec3(0.0f, 5.0f, 0.0f);
-        velocity = 0.0f;
-        onGround = false;
-    }
-    
+
     // Creative Mode Toggle
     ImGui::Checkbox("Creative Mode", &CreativeMode);
+
+    // FPS Meter
+    ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
 
     ImGui::End();
 
@@ -516,112 +513,132 @@ int main(){
     ImGui_ImplOpenGL3_Init("#version 330 core"); 
 
     // main block coords
-   float vertices[] = {
-
+    float topFace[] = {
         // Top face (+Y) → faceID = 0
          0.5f,  0.5f, -0.5f,  0.0f, 0.0f, 0.0f,
         -0.5f,  0.5f, -0.5f,  1.0f, 0.0f, 0.0f,
         -0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 0.0f,
          0.5f,  0.5f, -0.5f,  0.0f, 0.0f, 0.0f,
          0.5f,  0.5f,  0.5f,  0.0f, 1.0f, 0.0f,
-        -0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 0.0f,    
+        -0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 0.0f,
+    };
 
-        // Front face (+Y) → faceID = 0
+    float frontFace[] = {
+        // Front face (+Z) → faceID = 1
         -0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 1.0f,
         -0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 1.0f,
          0.5f,  0.5f, -0.5f,  1.0f, 1.0f, 1.0f,
         -0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 1.0f,
          0.5f, -0.5f, -0.5f,  1.0f, 0.0f, 1.0f,
          0.5f,  0.5f, -0.5f,  1.0f, 1.0f, 1.0f,
+    };
 
-        // Right face (–X) → faceID = 1
+    float rightFace[] = {
+        // Right face (–X) → faceID = 2
         -0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 2.0f,
         -0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 2.0f,
         -0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 2.0f,
         -0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 2.0f,
         -0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 2.0f,
         -0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 2.0f,
+    };
 
-        // Bottom face (+Z) → faceID = 5
+    float backFace[] = {
+        // back face (+Z) → faceID = 3
         -0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 3.0f,
         -0.5f,  0.5f,  0.5f,  0.0f, 1.0f, 3.0f,
          0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 3.0f,
         -0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 3.0f,
          0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 3.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 3.0f,        
+         0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 3.0f,
+    };
 
-        // Left face (+X) → faceID = 2
+    float leftFace[] = {
+        // Left face (+X) → faceID = 4
          0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 4.0f,
          0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 4.0f,
          0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 4.0f,
          0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 4.0f,
          0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 4.0f,
          0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 4.0f,
+    };
 
-        // Bottom face (–Y) → faceID = 3
+    float bottomFace[] = {
+        // Bottom face (–Y) → faceID = 5
         -0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 5.0f,
          0.5f, -0.5f, -0.5f,  1.0f, 0.0f, 5.0f,
          0.5f, -0.5f,  0.5f,  1.0f, 1.0f, 5.0f,
         -0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 5.0f,
         -0.5f, -0.5f,  0.5f,  0.0f, 1.0f, 5.0f,
-         0.5f, -0.5f,  0.5f,  1.0f, 1.0f, 5.0f,         
+         0.5f, -0.5f,  0.5f,  1.0f, 1.0f, 5.0f,
     };
 
     FastNoiseLite noise;
     noise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
     noise.SetSeed(1337);
-    noise.SetFrequency(0.05f);
-    
+    noise.SetFrequency(0.05f);    
 
     int radius = TERRAIN_SIZE / 2;
     glm::ivec3 center = glm::ivec3(0, 0, 0); // or playerPos or wherever
-
+    
     for (int x = -radius; x <= radius; ++x) {
         for (int z = -radius; z <= radius; ++z) {
-            for (int y = -2; y < 4; y++) {    
-                if (x*x + z*z <= radius*radius) { // x^2 + z^2 <= r^2 for a circle
-                    float height = noise.GetNoise((float)x, (float)z); 
-                    height = glm::round(height);
-                    glm::vec3 blockPosition;
-                    if (y==height)
-                        blockPosition = glm::vec3((float)z, height, (float)x);
-                    else if (y < height) {
-                        blockPosition = glm::vec3((float)z, (float)y, (float)x);
-                    }
-                    else{
-                        continue; // skip if y is above the terrain height
-                    }                
-                    glm::ivec3 key = center + glm::ivec3(blockPosition); // Center the terrain around the origin
-                    blockMap[key] = true;
-                }
+            if (x*x + z*z <= radius*radius) { // x^2 + z^2 <= r^2 for a circle
+                float height = noise.GetNoise((float)x, (float)z); 
+                height = glm::round(height);
+                glm::vec3 blockPosition = glm::vec3((float)z, height, (float)x);               
+                glm::ivec3 key = center + glm::ivec3(blockPosition); // Center the terrain around the origin
+                blockMap[key] = true;
             }
         }
     }
+
+    // int CHUNK_SIZE = 16;
+
+    // for( int x = -CHUNK_SIZE; x < CHUNK_SIZE; x++){
+    //     for( int z = -CHUNK_SIZE; z < CHUNK_SIZE; z++){
+    //         float height = noise.GetNoise((float)x, (float)z); // Scale the height
+    //         height = glm::round(height); // Round the height to the nearest integer
+    //         for( int y = 0; y < 1; y++){
+    //             glm::vec3 blockPosition = glm::vec3((float)x, height, (float)z);
+    //             glm::ivec3 key = glm::ivec3(blockPosition); // Center the terrain around the origin
+    //             blockMap[key] = true;
+    //         }
+    //     }
+    // }
+
+
 
 
     // Create and compile shaders
     Shader shader("shaders/shader.vert", "shaders/shader.frag");
 
     // Create and configure buffers
-    unsigned int VBO, VAO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
+    unsigned int VBOs[6], VAOs[6];
+    glGenVertexArrays(6, VAOs);
+    glGenBuffers(6, VBOs);
 
-    glBindVertexArray(VAO); 
+    float* faces[] = {topFace, frontFace, rightFace, backFace, leftFace, bottomFace};
+    size_t faceSizes[] = {sizeof(topFace), sizeof(frontFace), sizeof(rightFace), sizeof(backFace), sizeof(leftFace), sizeof(bottomFace)};
 
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    for (int i = 0; i < 6; ++i) {
+        glBindVertexArray(VAOs[i]);
 
-    // Position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, VBOs[i]);
+        glBufferData(GL_ARRAY_BUFFER, faceSizes[i], faces[i], GL_STATIC_DRAW);
 
-    // texture coord attribute
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
+        // Position attribute
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
 
-    glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(5 * sizeof(float)));
-    glEnableVertexAttribArray(2);    
+        // Texture coord attribute
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+        glEnableVertexAttribArray(1);
+
+        // Face ID attribute
+        glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(5 * sizeof(float)));
+        glEnableVertexAttribArray(2);
+    }
 
     // Set drawing mode
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -719,10 +736,6 @@ int main(){
         glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)curWidth/(float)curHeight, 0.1f, 100.0f);
         shader.setMat4("projection", projection);
 
-
-        // Bind VAO
-        glBindVertexArray(VAO);
-
         // Draw 
         for (const auto& block : blockMap) {
             if (block.second) { // Check if the block exists
@@ -733,7 +746,7 @@ int main(){
 
                 shader.setMat4("model", model);
 
-                // Set block type (you can modify this logic as needed)
+                // Set block type 
                 blockType = 0; 
                 if (glm::ivec3(blockPosition) == selectedBlock) {
                     shader.setBool("selectedBlock", true);
@@ -743,7 +756,10 @@ int main(){
                 }
                 shader.setInt("blockType", blockType);
 
-                glDrawArrays(GL_TRIANGLES, 0, sizeof(vertices) / sizeof(float));
+                for ( int i = 0; i < 6; ++i) {
+                    glBindVertexArray(VAOs[i]);
+                    glDrawArrays(GL_TRIANGLES, 0, sizeof(topFace) / sizeof(float));
+                }
             }
         }
         
@@ -756,8 +772,8 @@ int main(){
     }
     
     // Clean up
-    glDeleteVertexArrays(1, &VAO);
-    glDeleteBuffers(1, &VBO);
+    // glDeleteVertexArrays(1, &VAO);
+    // glDeleteBuffers(1, &VBO);
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();    
