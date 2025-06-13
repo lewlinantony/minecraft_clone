@@ -42,7 +42,7 @@ const float margin = 0.5f; // a margin to increase the number of blocks that are
 float velocity = 0.0f;
 glm::vec3 playerPosition = glm::vec3(0.0f, 10.0f, 0.0f);
 bool onGround = false;
-bool CreativeMode = true; 
+bool CreativeMode = false; 
 
 // Camera state
 float yaw = -90.0f;
@@ -115,7 +115,7 @@ namespace std {
 }
 
 // Block map
-std::unordered_map<glm::ivec3, bool> blockMap; // Map to store blocks in the world
+std::unordered_map<glm::ivec3, int> blockMap; // Map to store blocks in the world
 
 // Function declarations
 bool boxBoxOverlap(BoundingBox playerBox, BoundingBox blockBox);
@@ -354,7 +354,12 @@ void processInput(GLFWwindow* window){
     }     
 
     nextPlayerPosition = playerPosition + xz_movement;
-    playerPosition = resolveXZCollision(nextPlayerPosition, xz_movement);
+    if(!CreativeMode){
+        playerPosition = resolveXZCollision(nextPlayerPosition, xz_movement);
+    }
+    else{
+        playerPosition = nextPlayerPosition;
+    }
 
     // block removal
     mouseLeftIsPressed = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
@@ -366,7 +371,7 @@ void processInput(GLFWwindow* window){
     // block placement
     mouseRightIsPressed = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
     if ( mouseRightIsPressed && !mouseRightWasPressed && previousBlock != glm::ivec3(INT_MAX, INT_MAX, INT_MAX) && selectedBlock != glm::ivec3(INT_MAX, INT_MAX, INT_MAX) ) {
-        blockMap[previousBlock] = true; 
+        blockMap[previousBlock] = 1; 
     }
     mouseRightWasPressed = mouseRightIsPressed;
 
@@ -390,7 +395,7 @@ void processInput(GLFWwindow* window){
             y_movement.y -= speed;
         }
         nextPlayerPosition = playerPosition + y_movement;
-        playerPosition = resolveYCollision(nextPlayerPosition, y_movement);        
+        playerPosition = nextPlayerPosition;      
     }
 
 }
@@ -492,6 +497,7 @@ std::vector<int> validFaces(glm::ivec3 block){
     }
     return visibleFaces;
 }
+
 int main(){
     // Initialize GLFW
     glfwInit();
@@ -598,35 +604,43 @@ int main(){
     noise.SetSeed(1337);
     noise.SetFrequency(0.05f);    
 
-    int radius = TERRAIN_SIZE / 2;
-    glm::ivec3 center = glm::ivec3(0, 0, 0); // or playerPos or wherever
+    // int radius = TERRAIN_SIZE / 2;
+    // glm::ivec3 center = glm::ivec3(0, 0, 0); // or playerPos or wherever
     
-    for (int x = -radius; x <= radius; ++x) {
-        for (int z = -radius; z <= radius; ++z) {
-            if (x*x + z*z <= radius*radius) { // x^2 + z^2 <= r^2 for a circle
-                float height = noise.GetNoise((float)x, (float)z); 
-                height = glm::round(height);
-                glm::vec3 blockPosition = glm::vec3((float)z, height, (float)x);               
-                glm::ivec3 key = center + glm::ivec3(blockPosition); // Center the terrain around the origin
-                blockMap[key] = true;
-            }
-        }
-    }
-
-    // int CHUNK_SIZE = 16;
-
-    // for( int x = -CHUNK_SIZE; x < CHUNK_SIZE; x++){
-    //     for( int z = -CHUNK_SIZE; z < CHUNK_SIZE; z++){
-    //         float height = noise.GetNoise((float)x, (float)z); // Scale the height
-    //         height = glm::round(height); // Round the height to the nearest integer
-    //         for( int y = 0; y < 1; y++){
-    //             glm::vec3 blockPosition = glm::vec3((float)x, height, (float)z);
-    //             glm::ivec3 key = glm::ivec3(blockPosition); // Center the terrain around the origin
+    // for (int x = -radius; x <= radius; ++x) {
+    //     for (int z = -radius; z <= radius; ++z) {
+    //         if (x*x + z*z <= radius*radius) { // x^2 + z^2 <= r^2 for a circle
+    //             float height = noise.GetNoise((float)x, (float)z); 
+    //             height = glm::round(height);
+    //             glm::vec3 blockPosition = glm::vec3((float)z, height, (float)x);               
+    //             glm::ivec3 key = center + glm::ivec3(blockPosition); // Center the terrain around the origin
     //             blockMap[key] = true;
     //         }
     //     }
     // }
 
+    int CHUNK_SIZE = 16;
+
+    for (int x = -CHUNK_SIZE; x < CHUNK_SIZE; x++) {
+        for (int z = -CHUNK_SIZE; z < CHUNK_SIZE; z++) {
+            float height = noise.GetNoise((float)x, (float)z); // Scale the height
+            height = glm::round(height); // Round the height to the nearest integer
+            for (int y = -6; y <= height; y++) {
+                glm::ivec3 blockPosition = glm::ivec3(x, y, z);
+                if (y == height) {
+                    blockMap[blockPosition] = 1; // Top layer block type
+                    std::cout << "Block type 1 at: " << blockPosition.x << ", " << blockPosition.y << ", " << blockPosition.z << std::endl;
+                } else if (y >= height - 3) {
+                    blockMap[blockPosition] = 2; // Next 3 blocks block type
+                    std::cout << "Block type 2 at: " << blockPosition.x << ", " << blockPosition.y << ", " << blockPosition.z << std::endl;
+                } else {
+                    blockMap[blockPosition] = 3; // Rest block type
+                    std::cout << "Block type 3 at: " << blockPosition.x << ", " << blockPosition.y << ", " << blockPosition.z << std::endl;
+                }
+            }
+        }
+    }
+    
 
 
 
@@ -727,7 +741,12 @@ int main(){
             }
             glm::vec3 y_movement = glm::vec3(0.0f, velocity * deltaTime, 0.0f); // vertical movement
             glm::vec3 nextPlayerPosition = playerPosition + y_movement;
-            playerPosition = resolveYCollision(nextPlayerPosition, y_movement);            
+            if (!CreativeMode){
+                playerPosition = resolveYCollision(nextPlayerPosition, y_movement);            
+            }
+            else{
+                playerPosition = nextPlayerPosition;
+            }
         }
 
         // Update camera position
@@ -766,15 +785,14 @@ int main(){
 
                 shader.setMat4("model", model);
 
-                // Set block type 
-                blockType = 0; 
+
                 if (glm::ivec3(blockPosition) == selectedBlock) {
                     shader.setBool("selectedBlock", true);
                 }
                 else{
                     shader.setBool("selectedBlock", false);
                 }
-                shader.setInt("blockType", blockType);
+                shader.setInt("blockType", block.second);
 
 
                 for (const auto &i : validFaces(block.first)) {

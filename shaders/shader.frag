@@ -16,7 +16,7 @@ void main()
     float texPerRow = atlasSize/texSize;
 
     vec2 atlasPos;
-    if (blockType == 0) { // Dirt
+    if (blockType == 1) { // Grass
         if (int(FaceID) == 0) { // Top
             atlasPos = vec2(0.0, 0.0);
         }
@@ -27,10 +27,10 @@ void main()
             atlasPos = vec2(2.0, 0.0);
         }
     }
-    else if (blockType == 1){ //Dirt
+    else if (blockType == 2){ //Dirt
         atlasPos = vec2(2.0f, 0.0f);
     }
-    else if (blockType == 2){ //Stone
+    else if (blockType == 3){ //Stone
         atlasPos = vec2(3.0f, 0.0f);
     }    
 
