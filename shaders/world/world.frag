@@ -4,10 +4,11 @@ out vec4 FragColor;
 
 in vec2 TexCoord;
 in float FaceID;
+in float blockType;
+in vec3 Pos;
 
 uniform sampler2D text;
-uniform int blockType;
-uniform bool selectedBlock;
+uniform vec3 selectedBlock;
 
 void main()
 {
@@ -60,14 +61,8 @@ void main()
     // Apply the border darkening
     texColor.rgb *= borderFactor;
 
-    float brightness;
+    float brightness = 1.0f;
 
-    if (selectedBlock){
-        brightness = 0.8f;
-    }
-    else{
-        brightness = 1.0f;
-    }
 
     //Apply the brightness
     texColor.rgb *= brightness;

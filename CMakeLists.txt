@@ -18,14 +18,15 @@ set(SOURCE_FILES
 )
 
 # Create executable
+📈
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
 
 # Create directory structure
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/shaders)
 
 # Copy shader files to build directory
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/shaders/shader.vert ${CMAKE_CURRENT_BINARY_DIR}/shaders/shader.vert COPYONLY)
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/shaders/shader.frag ${CMAKE_CURRENT_BINARY_DIR}/shaders/shader.frag COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/shaders/world/world.vert ${CMAKE_CURRENT_BINARY_DIR}/shaders/world/world.vert COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/shaders/world/world.frag ${CMAKE_CURRENT_BINARY_DIR}/shaders/world/world.frag COPYONLY)
 
 # Add GLAD library
 add_library(glad STATIC extern/glad/src/glad.c)
