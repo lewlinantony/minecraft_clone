@@ -13,9 +13,7 @@ find_package(OpenGL REQUIRED)
 find_package(glfw3 REQUIRED)
 
 # Source files
-set(SOURCE_FILES
-    src/main.cpp
-)
+set(SOURCE_FILES src/main.cpp)
 
 # Create executable
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
@@ -24,8 +22,10 @@ add_executable(${PROJECT_NAME} ${SOURCE_FILES})
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/shaders)
 
 # Copy shader files to build directory
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/shaders/world/world.vert ${CMAKE_CURRENT_BINARY_DIR}/shaders/world/world.vert COPYONLY)
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/shaders/world/world.frag ${CMAKE_CURRENT_BINARY_DIR}/shaders/world/world.frag COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/shaders/world/shader.vert ${CMAKE_CURRENT_BINARY_DIR}/shaders/world/shader.vert COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/shaders/world/shader.frag ${CMAKE_CURRENT_BINARY_DIR}/shaders/world/shader.frag COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/shaders/selectedBlock/shader.vert ${CMAKE_CURRENT_BINARY_DIR}/shaders/selectedBlock/shader.vert COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/shaders/selectedBlock/shader.frag ${CMAKE_CURRENT_BINARY_DIR}/shaders/selectedBlock/shader.frag COPYONLY)
 
 # Add GLAD library
 add_library(glad STATIC extern/glad/src/glad.c)

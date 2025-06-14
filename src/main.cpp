@@ -102,6 +102,8 @@ std::vector<glm::vec3> rayStarts = { //effectively to thicken the ray so it dose
 
 //Buffer Objects
 unsigned int VBO, chunkVAO;
+unsigned int selectedBlockVBO, selectedBlockVAO;
+
 
 // face coords
 float topFace[] = {
@@ -164,8 +166,16 @@ float bottomFace[] = {
      0.5f, -0.5f,  0.5f,  1.0f, 1.0f, 5.0f,
 };
 
-float cubeVertices[] = {
+float* faceVertices[6] = {
+    topFace,     // faceID = 0
+    frontFace,   // faceID = 1
+    rightFace,   // faceID = 2
+    backFace,    // faceID = 3
+    leftFace,    // faceID = 4
+    bottomFace   // faceID = 5
+};
 
+float cubeVertices[] = {
     // Top face (+Y) → faceID = 0
      0.5f,  0.5f, -0.5f,  0.0f, 0.0f, 0.0f,
     -0.5f,  0.5f, -0.5f,  1.0f, 0.0f, 0.0f,
@@ -218,7 +228,6 @@ float cubeVertices[] = {
 
 // chunk data
 std::vector<float> chunk;
-
 
 // Hash function for glm::ivec3
 namespace std {
@@ -630,29 +639,19 @@ void calculateChunk(){
             model = glm::translate(model, blockPosition);            
 
             for (int faceID : validFaces(block.first)) {
-                const float* faceVertices = nullptr;
-
-                switch (faceID) {
-                    case 0: faceVertices = topFace; break;
-                    case 1: faceVertices = frontFace; break;
-                    case 2: faceVertices = rightFace; break;
-                    case 3: faceVertices = backFace; break;
-                    case 4: faceVertices = leftFace; break;
-                    case 5: faceVertices = bottomFace; break;
-                }
-
-                if (!faceVertices) continue;
+                const float* curFace = faceVertices[faceID];
+                if (!curFace) continue;
 
                 for (int i = 0; i < 6; ++i) { // 6 vertices per face
                     int idx = i * 6;
 
-                    float vx = faceVertices[idx + 0] + block.first.x;
-                    float vy = faceVertices[idx + 1] + block.first.y;
-                    float vz = faceVertices[idx + 2] + block.first.z;
+                    float vx = curFace[idx + 0] + block.first.x;
+                    float vy = curFace[idx + 1] + block.first.y;
+                    float vz = curFace[idx + 2] + block.first.z;
 
-                    float ux = faceVertices[idx + 3];
-                    float uy = faceVertices[idx + 4];
-                    float fid = faceVertices[idx + 5];
+                    float ux = curFace[idx + 3];
+                    float uy = curFace[idx + 4];
+                    float fid = curFace[idx + 5];
 
                     float blockType = block.second;
 
@@ -753,8 +752,9 @@ int main(){
     }   
 
     // Create and compile shaders
-    Shader shader("shaders/world/world.vert", "shaders/world/world.frag");  
-    
+
+    //Chunk Shader
+    Shader chunkShader("shaders/world/shader.vert", "shaders/world/shader.frag");      
     
     // Create and configure buffers
     glGenVertexArrays(1, &chunkVAO);
@@ -763,7 +763,6 @@ int main(){
     glBindVertexArray(chunkVAO);
     
     calculateChunk();
-
 
     // Position attribute
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)0);
@@ -777,8 +776,33 @@ int main(){
     glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)(5 * sizeof(float)));
     glEnableVertexAttribArray(2);
 
+    // Block Type
     glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)(6 * sizeof(float)));
-    glEnableVertexAttribArray(3);     
+    glEnableVertexAttribArray(3);
+    
+    
+    // Selected Block shader
+    Shader selectedBlockShader("shaders/selectedBlock/shader.vert", "shaders/selectedBlock/shader.frag");      
+
+    glGenVertexArrays(1, &selectedBlockVAO);
+    glGenBuffers(1, &selectedBlockVBO);
+
+    glBindVertexArray(selectedBlockVAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, selectedBlockVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);        
+
+    // Position attribute
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    // Texture coord attribute
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    // Face ID attribute
+    glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(5 * sizeof(float)));
+    glEnableVertexAttribArray(2);
 
 
     // Set drawing mode
@@ -788,6 +812,7 @@ int main(){
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 
+    //Load the texture
     unsigned int textureAtlas;
 
     glGenTextures(1, &textureAtlas);
@@ -825,8 +850,13 @@ int main(){
     
     stbi_image_free(data1);
 
-    shader.use();
-    shader.setInt("text", 0);
+
+    // Bind texture to the shaders
+    chunkShader.use();
+    chunkShader.setInt("text", 0);
+
+    selectedBlockShader.use();
+    selectedBlockShader.setInt("text", 0);
     
 
     // Main render loop
@@ -867,7 +897,7 @@ int main(){
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // Use shader
-        shader.use();
+        chunkShader.use();
 
         // Update viewport size
         int curWidth, curHeight;
@@ -878,16 +908,35 @@ int main(){
         glBindTexture(GL_TEXTURE_2D, textureAtlas);   
         
         glm::mat4 model = glm::mat4(1.0f);
-        shader.setMat4("model", model);        
+        chunkShader.setMat4("model", model);        
     
         glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp); // in vectors, dir = target - pos | target = pos + dir
-        shader.setMat4("view", view);
+        chunkShader.setMat4("view", view);
 
         glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)curWidth/(float)curHeight, 0.1f, 100.0f);
-        shader.setMat4("projection", projection);
+        chunkShader.setMat4("projection", projection);
 
         glBindVertexArray(chunkVAO);
-        glDrawArrays(GL_TRIANGLES, 0, chunk.size() / 7); 
+        glDrawArrays(GL_TRIANGLES, 0, chunk.size() / 7);
+        
+        
+        // highlight the selected block with seperate shader
+        if (selectedBlock != glm::ivec3(INT_MAX)){
+            selectedBlockShader.use();
+
+            selectedBlockShader.setInt("blockType", blockMap[selectedBlock]);
+
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::translate(model, glm::vec3(selectedBlock));
+            model = glm::scale(model, glm::vec3(1.001));
+
+            selectedBlockShader.setMat4("model", model);        
+            selectedBlockShader.setMat4("view", view);
+            selectedBlockShader.setMat4("projection", projection);
+            
+            glBindVertexArray(selectedBlockVAO);
+            glDrawArrays(GL_TRIANGLES, 0, sizeof(cubeVertices)/sizeof(float));
+        }
         
         // Render ImGui
         renderImGui(); 

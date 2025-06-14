@@ -55,14 +55,12 @@ void main()
     if (distFromEdge < borderWidth) { // if inside the set border width
         // Smoothly transition from border darkness to normal color
         borderFactor = mix(borderDarkness, 1.0, distFromEdge/borderWidth); // linearly interpolate it with distFromEdge/borderWidth as the scale that determines how darked it is
-    }
-    
+    }        
 
     // Apply the border darkening
     texColor.rgb *= borderFactor;
 
     float brightness = 1.0f;
-
 
     //Apply the brightness
     texColor.rgb *= brightness;
