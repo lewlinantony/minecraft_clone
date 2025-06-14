@@ -39,9 +39,11 @@ const float margin = 0.5f; // a margin to increase the number of blocks that are
 
 // Player state
 float velocity = 0.0f;
-glm::vec3 playerPosition = glm::vec3(0.0f, 10.0f, 0.0f);
+glm::vec3 playerPosition;
 bool onGround = false;
-bool CreativeMode = false; 
+bool CreativeMode = true; 
+glm::vec3 playerOrigin = glm::vec3(0.0f);
+bool playerPosFlag = true; // one time use flag to initialise player origin position
 
 // Camera state
 float yaw = -90.0f;
@@ -103,6 +105,15 @@ std::vector<glm::vec3> rayStarts = { //effectively to thicken the ray so it dose
 //Buffer Objects
 unsigned int VBO, chunkVAO;
 unsigned int selectedBlockVBO, selectedBlockVAO;
+
+
+//noise values
+int   g_NoiseOctaves    = 4;
+float g_NoiseGain       = 0.3f;  // Same as persistence
+float g_NoiseLacunarity = 2.1f;
+float g_NoiseFrequency  = 0.01f;
+float amplitude         = 10.0f;
+int   g_NoiseSeed       = 133;
 
 
 // face coords
@@ -226,6 +237,8 @@ float cubeVertices[] = {
 
 };
 
+
+
 // chunk data
 std::vector<float> chunk;
 
@@ -257,7 +270,7 @@ void renderImGui();
 void rayCast(glm::vec3 cameraFront);
 std::vector<int> validFaces(glm::ivec3 block);
 void calculateChunk();
-
+void generateTerrain();
 
 bool boxBoxOverlap(BoundingBox playerBox, BoundingBox blockBox){
     return ((playerBox.min.x <= blockBox.max.x && playerBox.max.x >= blockBox.min.x) and
@@ -548,14 +561,31 @@ void renderImGui() {
     ImGui::Text("Position: %.2f, %.2f, %.2f", playerPosition.x, playerPosition.y, playerPosition.z);
     ImGui::Text("On Ground: %s", onGround ? "Yes" : "No");
     ImGui::Text("Velocity: %.2f", velocity);
-
+    
+    
     // Creative Mode Toggle
     ImGui::Checkbox("Creative Mode", &CreativeMode);
-
+    
     // FPS Meter
     ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
-
     ImGui::End();
+
+    // Terrain Noise Controls
+    // ImGui::Begin("Noise Settings");
+
+    // ImGui::SliderInt("Octaves", &g_NoiseOctaves, 1, 8);
+    // ImGui::SliderFloat("Gain (Persistence)", &g_NoiseGain, 0.0f, 1.0f);
+    // ImGui::SliderFloat("Lacunarity", &g_NoiseLacunarity, 1.0f, 5.0f);
+    // ImGui::SliderFloat("Frequency", &g_NoiseFrequency, 0.0005f, 0.2f, "%.4f");
+    // ImGui::SliderFloat("Amplitude", &amplitude, 0.0f, 20.0f, "%.2f");
+
+    // if (ImGui::Button("Regenerate Terrain")) {
+    //     generateTerrain(); // You must define this function to apply changes
+    //     calculateChunk();
+    // }
+
+
+    // ImGui::End();
 
     // Render ImGui
     ImGui::Render();
@@ -671,6 +701,63 @@ void calculateChunk(){
     glBufferData(GL_ARRAY_BUFFER, chunk.size() * sizeof(float), chunk.data(), GL_STATIC_DRAW);    
 }
 
+void generateTerrain(){
+    blockMap.clear();
+
+    FastNoiseLite noise;
+    noise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
+    noise.SetFractalType(FastNoiseLite::FractalType_FBm);
+    noise.SetSeed(g_NoiseSeed);
+    noise.SetFractalOctaves(g_NoiseOctaves);
+    noise.SetFractalGain(g_NoiseGain);
+    noise.SetFractalLacunarity(g_NoiseLacunarity);
+    noise.SetFrequency(g_NoiseFrequency);
+
+    int CHUNK_SIZE = 16;
+
+    float scale = 5.0f;
+
+    float height = noise.GetNoise(0.0f, 0.0f);
+    height = (height + 1.0f) * amplitude;   
+    height = glm::round(height);
+    playerOrigin = glm::vec3(0.0f, height + 2.0f, 0.0f); // Spawn slightly above    
+
+    for (int x = -CHUNK_SIZE; x < CHUNK_SIZE; x++) {
+        for (int z = -CHUNK_SIZE; z < CHUNK_SIZE; z++) {
+            float height = noise.GetNoise((float)x, (float)z) ;
+            height = (height + 1.0f) * amplitude;   
+            height = glm::round(height); // Round the height to the nearest integer                  
+            for (int y = -30; y <= height; y++) {
+                glm::ivec3 blockPosition = glm::ivec3(x, y, z);
+                if (y == height) {
+                    blockMap[blockPosition] = 1; // Top layer block type
+                } else if (y >= height - 5) {
+                    blockMap[blockPosition] = 2; // Next 3 blocks block type
+                } else {
+                    blockMap[blockPosition] = 3; // Rest block type
+                }
+            }
+        }
+    }   
+
+
+    // int radius = TERRAIN_SIZE / 2;
+    // glm::ivec3 center = glm::ivec3(0, 0, 0); // or playerPos or wherever
+    
+    // for (int x = -radius; x <= radius; ++x) {
+    //     for (int z = -radius; z <= radius; ++z) {
+    //         if (x*x + z*z <= radius*radius) { // x^2 + z^2 <= r^2 for a circle
+    //             float height = noise.GetNoise((float)x, (float)z); 
+    //             height = glm::round(height);
+    //             glm::vec3 blockPosition = glm::vec3((float)z, height, (float)x);               
+    //             glm::ivec3 key = center + glm::ivec3(blockPosition); // Center the terrain around the origin
+    //             blockMap[key] = true;
+    //         }
+    //     }
+    // }
+}
+
+
 int main(){
     // Initialize GLFW
     glfwInit();
@@ -711,45 +798,7 @@ int main(){
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330 core"); 
 
-
-    FastNoiseLite noise;
-    noise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
-    noise.SetSeed(1337);
-    noise.SetFrequency(0.05f);    
-
-    // int radius = TERRAIN_SIZE / 2;
-    // glm::ivec3 center = glm::ivec3(0, 0, 0); // or playerPos or wherever
-    
-    // for (int x = -radius; x <= radius; ++x) {
-    //     for (int z = -radius; z <= radius; ++z) {
-    //         if (x*x + z*z <= radius*radius) { // x^2 + z^2 <= r^2 for a circle
-    //             float height = noise.GetNoise((float)x, (float)z); 
-    //             height = glm::round(height);
-    //             glm::vec3 blockPosition = glm::vec3((float)z, height, (float)x);               
-    //             glm::ivec3 key = center + glm::ivec3(blockPosition); // Center the terrain around the origin
-    //             blockMap[key] = true;
-    //         }
-    //     }
-    // }
-
-    int CHUNK_SIZE = 16;
-
-    for (int x = -CHUNK_SIZE; x < CHUNK_SIZE; x++) {
-        for (int z = -CHUNK_SIZE; z < CHUNK_SIZE; z++) {
-            float height = noise.GetNoise((float)x, (float)z); // Scale the height
-            height = glm::round(height); // Round the height to the nearest integer
-            for (int y = -4; y <= height; y++) {
-                glm::ivec3 blockPosition = glm::ivec3(x, y, z);
-                if (y == height) {
-                    blockMap[blockPosition] = 1; // Top layer block type
-                } else if (y >= height - 3) {
-                    blockMap[blockPosition] = 2; // Next 3 blocks block type
-                } else {
-                    blockMap[blockPosition] = 3; // Rest block type
-                }
-            }
-        }
-    }   
+    generateTerrain();
 
     // Create and compile shaders
 
@@ -857,7 +906,8 @@ int main(){
 
     selectedBlockShader.use();
     selectedBlockShader.setInt("text", 0);
-    
+
+    playerPosition = playerOrigin;
 
     // Main render loop
     while(!glfwWindowShouldClose(window))
@@ -913,7 +963,7 @@ int main(){
         glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp); // in vectors, dir = target - pos | target = pos + dir
         chunkShader.setMat4("view", view);
 
-        glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)curWidth/(float)curHeight, 0.1f, 100.0f);
+        glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)curWidth/(float)curHeight, 0.1f, 5000.0f);
         chunkShader.setMat4("projection", projection);
 
         glBindVertexArray(chunkVAO);
@@ -921,7 +971,7 @@ int main(){
         
         
         // highlight the selected block with seperate shader
-        if (selectedBlock != glm::ivec3(INT_MAX)){
+        if (selectedBlock != glm::ivec3(INT_MAX) && !CreativeMode){
             selectedBlockShader.use();
 
             selectedBlockShader.setInt("blockType", blockMap[selectedBlock]);
@@ -936,6 +986,11 @@ int main(){
             
             glBindVertexArray(selectedBlockVAO);
             glDrawArrays(GL_TRIANGLES, 0, sizeof(cubeVertices)/sizeof(float));
+        }
+
+        if(playerPosFlag){ // one time use flag to set the player position cause if the draw call is too big the player keeps falling
+            playerPosition = playerOrigin;
+            playerPosFlag = false;
         }
         
         // Render ImGui
