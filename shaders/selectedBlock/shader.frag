@@ -59,7 +59,7 @@ void main()
     // Apply the border darkening
     texColor.rgb *= borderFactor;
 
-    float brightness = 0.5f;
+    float brightness = 0.8f;
 
     //Apply the brightness
     texColor.rgb *= brightness;
