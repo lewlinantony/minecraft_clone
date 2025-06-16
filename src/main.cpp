@@ -134,7 +134,7 @@ struct BlockInfo{
 };
 
 int CHUNK_SIZE = 8;
-int RENDER_DIST = 10; // This gives you 3x3x3 chunks centered at 0
+int RENDER_DIST = 2; // This gives you 3x3x3 chunks centered at 0
 
 // Block map
 std::unordered_map<glm::ivec3, BlockInfo> blockMap; // Map to store blocks in the world
@@ -689,17 +689,13 @@ std::vector<int> validFaces(glm::ivec3 block) {
 
 void recalculateChunk(glm::ivec3 curBlock){
     glm::ivec3 chunkCoord = getChunkOrigin(curBlock);
-    std::cout << "(" << chunkCoord.x << ", " << chunkCoord.y << ", " << chunkCoord.z << ")" << std::endl;    
-    std::cout << "(" << curBlock.x << ", " << curBlock.y << ", " << curBlock.z << ")" << std::endl;
-
-    std::cout << "Before vertex count: " << chunks[chunkCoord].size() / 7 << " blocks\n";
+    float size = chunks[chunkCoord].size() / 7 ;
     chunks[chunkCoord].clear();
 
     for (const auto& block : chunkMap[chunkCoord]) {
         glm::mat4 model = glm::mat4(1.0f);
         glm::vec3 blockPosition = glm::vec3(block); // Get position from blockMap key
         model = glm::translate(model, blockPosition);            
-        std::cout << "(" << block.x << ", " << block.y << ", " << block.z << ")" << std::endl;
         for (int faceID : validFaces(block)) {
             const float* curFace = faceVertices[faceID];
             if (!curFace) continue;
@@ -724,36 +720,84 @@ void recalculateChunk(glm::ivec3 curBlock){
                 chunks[chunkCoord].push_back(uy);
                 chunks[chunkCoord].push_back(fid); // faceID stored as float
                 chunks[chunkCoord].push_back(blockType);
-            }
+
+                std::cout << "Vertex Position: (" << vx << ", " << vy << ", " << vz << "), ";
+                std::cout << "UV: (" << ux << ", " << uy << "), ";
+                std::cout << "Face ID: " << fid << std::endl;                
+            }   
         }
     }    
-
-    std::cout << "Updated vertex count: " << chunks[chunkCoord].size() / 7 << " blocks\n";
+    std::cout << "Block: (" << curBlock.x << ", " << curBlock.y << ", " << curBlock.z << ")" << std::endl;    
+    std::cout << "Chunk: (" << chunkCoord.x << ", " << chunkCoord.y << ", " << chunkCoord.z << ")" << std::endl;  
+    std::cout << "Previous vertex count: " << size/6 << " faces\n";
+    std::cout << "Updated vertex count: " << chunks[chunkCoord].size() / (7*6) << " faces\n";
     
-    glBindBuffer(GL_ARRAY_BUFFER, chunkVBOMap[chunkCoord]);
+    GLuint chunkVAO, chunkVBO;
+
+    // Check if the chunk already has a VAO/VBO.
+    if (chunkVAOMap.find(chunkCoord) == chunkVAOMap.end()) {
+        // If not, this is a new chunk that just gained its first visible face.
+        // Create and configure a new VAO and VBO for it.
+        glGenVertexArrays(1, &chunkVAO);
+        glGenBuffers(1, &chunkVBO);
+
+        chunkVAOMap[chunkCoord] = chunkVAO;
+        chunkVBOMap[chunkCoord] = chunkVBO;
+
+        glBindVertexArray(chunkVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, chunkVBO);
+
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0); // Position
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)(3 * sizeof(float)));
+        glEnableVertexAttribArray(1); // UV Coords
+        glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)(5 * sizeof(float)));
+        glEnableVertexAttribArray(2); // Face ID
+        glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)(6 * sizeof(float)));
+        glEnableVertexAttribArray(3); // Block Type
+    } else {
+        // The chunk already exists, so just get its VBO handle for updating.
+        chunkVBO = chunkVBOMap[chunkCoord];
+        glBindBuffer(GL_ARRAY_BUFFER, chunkVBO);
+    }
     glBufferData(GL_ARRAY_BUFFER, chunks[chunkCoord].size() * sizeof(float), chunks[chunkCoord].data(), GL_DYNAMIC_DRAW);    
 }
 
 void recalculateChunkAndNeighbors(glm::ivec3 curBlock) {
     glm::ivec3 chunkCoord = getChunkOrigin(curBlock);
     glm::ivec3 blockOffset = curBlock - chunkCoord;
-
+    std::cout << "blockOffset: (" << blockOffset.x << ", " << blockOffset.y << ", " << blockOffset.z << ")\n";
     recalculateChunk(curBlock); // always recalc current
 
-    if (blockOffset.x == 0)
+
+    if (blockOffset.x == 0){
+        std::cout<<"refresh -X Chunk"<<std::endl;
         recalculateChunk(curBlock + glm::ivec3(-1, 0, 0));
-    else if (blockOffset.x == CHUNK_SIZE - 1)
+    }
+    else if (blockOffset.x == CHUNK_SIZE - 1){
+        std::cout<<"refresh +X Chunk"<<std::endl;
         recalculateChunk(curBlock + glm::ivec3(1, 0, 0));
-
-    if (blockOffset.y == 0)
+    }
+    if (blockOffset.y == 0){
+        std::cout<<"refresh -Y Chunk"<<std::endl;
         recalculateChunk(curBlock + glm::ivec3(0, -1, 0));
-    else if (blockOffset.y == CHUNK_SIZE - 1)
+    }
+    else if (blockOffset.y == CHUNK_SIZE - 1){
+        std::cout<<"refresh +Y Chunk"<<std::endl;
         recalculateChunk(curBlock + glm::ivec3(0, 1, 0));
-
-    if (blockOffset.z == 0)
+    }
+    if (blockOffset.z == 0){
+        std::cout<<"refresh -Z Chunk"<<std::endl;
         recalculateChunk(curBlock + glm::ivec3(0, 0, -1));
-    else if (blockOffset.z == CHUNK_SIZE - 1)
+    }
+    else if (blockOffset.z == CHUNK_SIZE - 1){
+        std::cout<<"refresh +Z Chunk"<<std::endl;
         recalculateChunk(curBlock + glm::ivec3(0, 0, 1));
+    }
+
+    std::cout<<"\n"<<std::endl;
+    std::cout<<"\n"<<std::endl;
+    std::cout<<"\n"<<std::endl;
 }
 
 void initChunks(){
@@ -846,7 +890,7 @@ void generateTerrain(){
 
     for (int cx = -RENDER_DIST; cx <= RENDER_DIST; cx++) {
         for (int cy = -RENDER_DIST; cy <= RENDER_DIST; cy++) {
-            for (int cz = -2; cz <= 2; cz++) {
+            for (int cz = -RENDER_DIST; cz <= RENDER_DIST; cz++) {
                 
                 glm::ivec3 chunkOrigin = glm::ivec3(cx, cy, cz) * CHUNK_SIZE;            
 
