@@ -653,8 +653,16 @@ void rayCast(glm::vec3 cameraFront){
                         closestHit = i; 
                         bestHit = blockPosition;
 
-                        //cannot place on player position Block
-                        if (prevBlockThisRay != glm::ivec3(glm::round(playerPosition))){
+                        BoundingBox prevBlockBox;
+                        prevBlockBox.min = glm::vec3(prevBlockThisRay) - glm::vec3(0.5f);
+                        prevBlockBox.max = glm::vec3(prevBlockThisRay) + glm::vec3(0.5f);                        
+
+                        BoundingBox playerBox;
+                        playerBox.min = playerPosition + glm::vec3(-playerWidth / 2.0f, 0.0f, -playerDepth / 2.0f);
+                        playerBox.max = playerPosition + glm::vec3(playerWidth / 2.0f, playerHeight, playerDepth / 2.0f);                        
+
+                        //cannot place if block overlaps with players bounding box
+                        if (!boxBoxOverlap(playerBox, prevBlockBox)) {
                             bestPrev = prevBlockThisRay; // Store the previous block position
                         }
                         else {
