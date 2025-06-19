@@ -832,7 +832,6 @@ void initializeSelectedBlockBuffer(){
 }
 
 void generateTerrain(glm::vec3 currentPlayerPosition){
-    chunkMap.clear();
 
     FastNoiseLite noise;
     noise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
@@ -850,6 +849,9 @@ void generateTerrain(glm::vec3 currentPlayerPosition){
             for (int cz = -RENDER_DIST; cz <= RENDER_DIST; cz++) {
                 
                 glm::ivec3 chunkOrigin = getChunkOrigin(glm::round(currentPlayerPosition)) + glm::ivec3(cx, cy, cz) * CHUNK_SIZE;   
+                if (chunks.find(chunkOrigin) != chunks.end()){
+                    continue;
+                }
                 Chunk& currentChunk = chunkMap[chunkOrigin];
 
                 for (int x = 0; x < CHUNK_SIZE; x++) {
@@ -880,9 +882,8 @@ void generateTerrain(glm::vec3 currentPlayerPosition){
                     }
                 }
 
-                if (chunks.find(chunkOrigin) == chunks.end()){
-                    calculateChunk(chunkOrigin);
-                }
+                calculateChunk(chunkOrigin);
+                
             }
         }
     }
@@ -1078,10 +1079,17 @@ int main(){
         glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)curWidth/(float)curHeight, 0.1f, 5000.0f);
         chunkShader.setMat4("projection", projection);
 
-        for(const auto &chunk: chunks){
-            if (chunkMap.find(chunk.first) != chunkMap.end()){
-                glBindVertexArray(chunkVAOMap[chunk.first]);
-                glDrawArrays(GL_TRIANGLES, 0, chunk.second.size() / 7);
+
+        for (int cx = -RENDER_DIST; cx <= RENDER_DIST; cx++) {
+            for (int cy = -RENDER_DIST; cy <= RENDER_DIST; cy++) {
+                for (int cz = -RENDER_DIST; cz <= RENDER_DIST; cz++) {
+                    
+                    glm::ivec3 chunkOrigin = getChunkOrigin(glm::round(playerPosition)) + glm::ivec3(cx, cy, cz) * CHUNK_SIZE;   
+                    if (chunks.find(chunkOrigin) != chunks.end()){
+                        glBindVertexArray(chunkVAOMap[chunkOrigin]);
+                        glDrawArrays(GL_TRIANGLES, 0, chunks[chunkOrigin].size() / 7);
+                    }
+                }
             }
         }
         
