@@ -38,11 +38,9 @@ const float margin = 0.5f; // a margin to increase the number of blocks that are
 
 // Player state
 float velocity = 0.0f;
-glm::vec3 playerPosition;
+glm::vec3 playerPosition = glm::vec3(0.0f);
 bool onGround = false;
 bool CreativeMode = false; 
-glm::vec3 playerOrigin = glm::vec3(0.0f);
-bool playerPosFlag = true; // one time use flag to initialise player origin position
 
 // Camera state
 float yaw = -90.0f;
@@ -129,6 +127,7 @@ namespace std {
 
 const int CHUNK_SIZE = 8;
 int RENDER_DIST = 2; // This gives you 3x3x3 chunks centered at 0
+bool chunkChange = false;
 
 struct BlockInfo{
     int type;
@@ -289,7 +288,7 @@ void rayCast(glm::vec3 cameraFront);
 std::vector<int> validFaces(glm::ivec3 block);
 void initializeSelectedBlockBuffer();
 void calculateChunk(glm::ivec3 block);
-void generateTerrain();
+void generateTerrain(glm::vec3 playerPosition);
 void calculateChunkAndNeighbors(glm::ivec3 block);
 glm::ivec3 getChunkOrigin(glm::ivec3 blockPosition);
 glm::ivec3 getBlockLocalPosition(glm::ivec3 blockPosition, glm::ivec3 chunkOrigin);
@@ -313,13 +312,6 @@ Block* getBlock(glm::ivec3 blockPosition) {
 
     // Chunk exists, now get the block's local position
     glm::ivec3 localPos = getBlockLocalPosition(blockPosition, chunkCoord);
-
-    // Bounds check (optional but good practice)
-    if (localPos.x < 0 || localPos.x >= CHUNK_SIZE ||
-        localPos.y < 0 || localPos.y >= CHUNK_SIZE ||
-        localPos.z < 0 || localPos.z >= CHUNK_SIZE) {
-        return nullptr; // Should not happen if math is correct
-    }
 
     return &it->second.blocks[localPos.x][localPos.y][localPos.z];
 }
@@ -412,34 +404,15 @@ void processInput(GLFWwindow* window){
 
     nextPlayerPosition = playerPosition + xz_movement;
     if(!CreativeMode){
-        playerPosition = resolveXZCollision(nextPlayerPosition, xz_movement);
+        auto nextpos = resolveXZCollision(nextPlayerPosition, xz_movement);
+        if (getChunkOrigin(nextpos)!=getChunkOrigin(playerPosition)){
+            chunkChange = true;
+        }
+        playerPosition = nextpos;
     }
     else{
         playerPosition = nextPlayerPosition;
     }
-
-    // block removal
-    mouseLeftIsPressed = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
-    if ( mouseLeftIsPressed && !mouseLeftWasPressed && selectedBlock != glm::ivec3(INT_MAX, INT_MAX, INT_MAX) ) {
-        Block* block_to_remove = getBlock(selectedBlock);
-        if (block_to_remove != nullptr && block_to_remove->type != 0) {
-            block_to_remove->type = 0; // Set to air
-            calculateChunkAndNeighbors(selectedBlock);
-        }
-        calculateChunkAndNeighbors(selectedBlock);
-    }
-    mouseLeftWasPressed = mouseLeftIsPressed;
-
-    // block placement
-    mouseRightIsPressed = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
-    if ( mouseRightIsPressed && !mouseRightWasPressed && previousBlock != glm::ivec3(INT_MAX, INT_MAX, INT_MAX) && selectedBlock != glm::ivec3(INT_MAX, INT_MAX, INT_MAX) ) {
-        glm::ivec3 chunkCoord = getChunkOrigin(previousBlock);
-        glm::ivec3 localPos = getBlockLocalPosition(previousBlock, chunkCoord);
-        
-        chunkMap[chunkCoord].blocks[localPos.x][localPos.y][localPos.z].type = 1; // Or whatever type you want to place
-        calculateChunkAndNeighbors(previousBlock);
-    }
-    mouseRightWasPressed = mouseRightIsPressed;
 
     if(!CreativeMode){
         // jump
@@ -464,6 +437,28 @@ void processInput(GLFWwindow* window){
         playerPosition = nextPlayerPosition;      
     }
 
+
+    // block removal
+    mouseLeftIsPressed = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+    if ( mouseLeftIsPressed && !mouseLeftWasPressed && selectedBlock != glm::ivec3(INT_MAX, INT_MAX, INT_MAX) ) {
+        Block* block_to_remove = getBlock(selectedBlock);
+        if (block_to_remove != nullptr && block_to_remove->type != 0) {
+            block_to_remove->type = 0; // Set to air
+            calculateChunkAndNeighbors(selectedBlock);
+        }
+    }
+    mouseLeftWasPressed = mouseLeftIsPressed;
+
+    // block placement
+    mouseRightIsPressed = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
+    if ( mouseRightIsPressed && !mouseRightWasPressed && previousBlock != glm::ivec3(INT_MAX, INT_MAX, INT_MAX) && selectedBlock != glm::ivec3(INT_MAX, INT_MAX, INT_MAX) ) {
+        glm::ivec3 chunkCoord = getChunkOrigin(previousBlock);
+        glm::ivec3 localPos = getBlockLocalPosition(previousBlock, chunkCoord);
+        
+        chunkMap[chunkCoord].blocks[localPos.x][localPos.y][localPos.z].type = 1; // Or whatever type you want to place
+        calculateChunkAndNeighbors(previousBlock);
+    }
+    mouseRightWasPressed = mouseRightIsPressed;
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height){
@@ -661,7 +656,7 @@ void rayCast(glm::vec3 cameraFront){
                         playerBox.min = playerPosition + glm::vec3(-playerWidth / 2.0f, 0.0f, -playerDepth / 2.0f);
                         playerBox.max = playerPosition + glm::vec3(playerWidth / 2.0f, playerHeight, playerDepth / 2.0f);                        
 
-                        //cannot place if block overlaps with players bounding box
+                        //cannot be previous block(block to be placed) if block overlaps with players bounding box
                         if (!boxBoxOverlap(playerBox, prevBlockBox)) {
                             bestPrev = prevBlockThisRay; // Store the previous block position
                         }
@@ -836,7 +831,8 @@ void initializeSelectedBlockBuffer(){
     glEnableVertexAttribArray(2); //blocktype is passed as a uniform variable
 }
 
-void generateTerrain(){
+void generateTerrain(glm::vec3 currentPlayerPosition){
+    chunkMap.clear();
 
     FastNoiseLite noise;
     noise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
@@ -853,7 +849,7 @@ void generateTerrain(){
         for (int cy = -RENDER_DIST; cy <= RENDER_DIST; cy++) {
             for (int cz = -RENDER_DIST; cz <= RENDER_DIST; cz++) {
                 
-                glm::ivec3 chunkOrigin = glm::ivec3(cx, cy, cz) * CHUNK_SIZE;            
+                glm::ivec3 chunkOrigin = getChunkOrigin(glm::round(currentPlayerPosition)) + glm::ivec3(cx, cy, cz) * CHUNK_SIZE;   
                 Chunk& currentChunk = chunkMap[chunkOrigin];
 
                 for (int x = 0; x < CHUNK_SIZE; x++) {
@@ -883,10 +879,13 @@ void generateTerrain(){
                         }
                     }
                 }
+
+                if (chunks.find(chunkOrigin) == chunks.end()){
+                    calculateChunk(chunkOrigin);
+                }
             }
         }
     }
-
 
     // int radius = TERRAIN_SIZE / 2;
     // glm::ivec3 center = glm::ivec3(0, 0, 0); // or playerPos or wherever
@@ -945,15 +944,15 @@ int main(){
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330 core"); 
 
-    generateTerrain();
-
+    Shader chunkShader("shaders/world/shader.vert", "shaders/world/shader.frag");         
+    
     // Create and compile shaders
+    generateTerrain(playerPosition);
 
     //Chunk Shader
-    Shader chunkShader("shaders/world/shader.vert", "shaders/world/shader.frag");         
-    for (auto const& [chunkCoord, chunk] : chunkMap) {
-        calculateChunk(chunkCoord);
-    }   
+    // for (auto const& [chunkCoord, chunk] : chunkMap) {
+    //     calculateChunk(chunkCoord);
+    // }   
         
     // Selected Block shader
     Shader selectedBlockShader("shaders/selectedBlock/shader.vert", "shaders/selectedBlock/shader.frag");        
@@ -1013,8 +1012,6 @@ int main(){
     selectedBlockShader.use();
     selectedBlockShader.setInt("text", 0);
 
-    playerPosition = playerOrigin;
-
     // Main render loop
     while(!glfwWindowShouldClose(window))
     {
@@ -1036,11 +1033,20 @@ int main(){
             glm::vec3 y_movement = glm::vec3(0.0f, velocity * deltaTime, 0.0f); // vertical movement
             glm::vec3 nextPlayerPosition = playerPosition + y_movement;
             if (!CreativeMode){
-                playerPosition = resolveYCollision(nextPlayerPosition, y_movement);            
+                auto nextpos = resolveYCollision(nextPlayerPosition, y_movement);
+                if (getChunkOrigin(nextpos)!=getChunkOrigin(playerPosition)){
+                    chunkChange = true;
+                }
+                playerPosition = nextpos;      
             }
             else{
                 playerPosition = nextPlayerPosition;
             }
+        }
+
+        if (chunkChange){
+            generateTerrain(playerPosition);
+            chunkChange = false;
         }
 
         // Update camera position
@@ -1073,8 +1079,10 @@ int main(){
         chunkShader.setMat4("projection", projection);
 
         for(const auto &chunk: chunks){
-            glBindVertexArray(chunkVAOMap[chunk.first]);
-            glDrawArrays(GL_TRIANGLES, 0, chunk.second.size() / 7);
+            if (chunkMap.find(chunk.first) != chunkMap.end()){
+                glBindVertexArray(chunkVAOMap[chunk.first]);
+                glDrawArrays(GL_TRIANGLES, 0, chunk.second.size() / 7);
+            }
         }
         
         
@@ -1095,11 +1103,6 @@ int main(){
             
             glBindVertexArray(selectedBlockVAO);
             glDrawArrays(GL_TRIANGLES, 0, sizeof(cubeVertices)/sizeof(float));
-        }
-
-        if(playerPosFlag){ // one time use flag to set the player position cause if the draw call is too big the player keeps falling
-            playerPosition = playerOrigin;
-            playerPosFlag = false;
         }
         
         // Render ImGui
