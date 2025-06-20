@@ -14,103 +14,22 @@
 #include <imgui/imgui_impl_opengl3.h>
 #include <cmath>
 
+//================================================================================
+// Global Constants & Utility Structs
+//================================================================================
+
 // Constants
 const int SCREEN_WIDTH = 800;
 const int SCREEN_HEIGHT = 600;
 const float BLOCK_SIZE = 1.0f; 
-const float COLLISION_THRESHOLD = 0.2f;
+const int CHUNK_SIZE = 8;
 
-// Physics constants
-const float gravity = 30.0f;
-const float jumpVelocity = 9.0f;
-const float cameraSpeed = 10.0f;
-const float mouseSensitivity = 0.1f;
-
-// Collision constants
-const float gap = 0.01f; // Gap to avoid collision issues
-const float margin = 0.5f; // a margin to increase the number of blocks that are checked for collision
-
-
-
-// Player state
-const float playerWidth = 0.6f;
-const float playerDepth = 0.6f;
-const float playerHeight = 1.8f;
-const float eyeHeight = 1.6f;
-float velocity = 0.0f;
-glm::vec3 playerPosition = glm::vec3(0.0f, 10.0f, 0.0f);
-bool onGround = false;
-bool CreativeMode = true; 
-
-// Camera state
-float yaw = -90.0f;
-float pitch = 0.0f;
-const float MAX_PITCH = 89.0f;
-glm::vec3 cameraPos = playerPosition + glm::vec3(0.0f, eyeHeight, 0.0f);
-glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
-glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
-glm::vec3 cameraRight;
-
-// Mouse state
-bool firstMouse = true;
-float lastX = SCREEN_WIDTH / 2.0f;
-float lastY = SCREEN_HEIGHT / 2.0f;
-
-// Input state
-bool spaceWasPressed = false;
-bool spaceIsPressed = false;
-bool tabWasPressed = false;
-bool tabIsPressed = false;
-bool mouseLeftIsPressed = false;
-bool mouseLeftWasPressed = false;
-bool mouseRightIsPressed = false;
-bool mouseRightWasPressed = false;
-
-// Movement scaling
-float MOVE_SCALE = 0.1f;
-
-// Frame timing
-float deltaTime = 0.0f; // Time between current frame and last frame
-float lastFrame = 0.0f; // Time of last frame
-
-// Uniforms
-int blockType;
-
-// Player bounding box
+// Bounding box
 struct BoundingBox {
     glm::vec3 max;
     glm::vec3 min;
 };
 BoundingBox nextPlayerBox;
-
-// Raycasting constants
-const float rayStart = 0.1f;
-const float rayEnd = 4.0f;
-const float rayStep = 0.1f;
-glm::ivec3 selectedBlock; // Currently selected block 
-glm::ivec3 previousBlock; // Previously selected block
-std::vector<glm::vec3> rayStarts = { //effectively to thicken the ray so it dosent pass through block edges
-    glm::vec3(0), // center
-    glm::vec3(0.05f, 0, 0),
-    glm::vec3(-0.05f, 0, 0),
-    glm::vec3(0, 0.05f, 0),
-    glm::vec3(0, -0.05f, 0),
-    glm::vec3(0, 0, 0.05f),
-    glm::vec3(0, 0, -0.05f)
-};   
-
-//Buffer Objects
-unsigned int selectedBlockVBO, selectedBlockVAO;
-
-
-//noise values
-int   g_NoiseOctaves    = 4;
-float g_NoiseGain       = 0.3f;  // Same as persistence
-float g_NoiseLacunarity = 2.1f;
-float g_NoiseFrequency  = 0.01f;
-float amplitude         = 10.0f;
-int   g_NoiseSeed       = 133;
-
 
 // Hash function for glm::ivec3
 namespace std {
@@ -124,38 +43,6 @@ namespace std {
         }
     };
 }
-
-const int CHUNK_SIZE = 8;
-int Y_LOAD_DIST = 5;
-int XZ_LOAD_DIST = 6;
-int Y_RENDER_DIST = 5; 
-int XZ_RENDER_DIST = 5; 
-bool chunkChange = false;
-
-
-struct BlockInfo{
-    int type;
-    glm::ivec3 chunkCoord;
-};
-
-struct Block{
-    int type;
-    glm::ivec3 coord;
-};
-
-struct Chunk {
-    Block blocks[CHUNK_SIZE][CHUNK_SIZE][CHUNK_SIZE];
-};
-
-
-// Chunk map
-std::unordered_map<glm::ivec3, Chunk> chunkMap;
-
-// chunk data
-std::unordered_map<glm::ivec3, std::vector<float>> chunks;
-
-std::unordered_map<glm::ivec3, GLuint> chunkVBOMap;
-std::unordered_map<glm::ivec3, GLuint> chunkVAOMap;
 
 // face coords
 float topFace[] = {
@@ -279,34 +166,108 @@ float cubeVertices[] = {
 };
 
 
-// Function declarations
-bool boxBoxOverlap(BoundingBox playerBox, BoundingBox blockBox);
-bool pointBoxOverlap(glm::vec3 point, BoundingBox box);
-glm::vec3 resolveYCollision(glm::vec3& p_nextPlayerPosition, glm::vec3 y_movement);
-glm::vec3 resolveXZCollision(glm::vec3 p_nextPlayerPosition, glm::vec3 p_velocity);
-void mouse_callback(GLFWwindow* window, double xpos, double ypos);
-void processInput(GLFWwindow* window);
-void framebuffer_size_callback(GLFWwindow* window, int width, int height);
-void renderImGui();
-void rayCast(glm::vec3 cameraFront);
-std::vector<int> validFaces(glm::ivec3 block);
-void initializeSelectedBlockBuffer();
-void calculateChunk(glm::ivec3 block);
-void generateTerrain(glm::vec3 playerPosition);
-void calculateChunkAndNeighbors(glm::ivec3 block);
-glm::ivec3 getChunkOrigin(glm::ivec3 blockPosition);
-glm::ivec3 getBlockLocalPosition(glm::ivec3 blockPosition, glm::ivec3 chunkOrigin);
-Block* getBlock(glm::ivec3 blockPosition);
+//================================================================================
+// Component Structs
+//================================================================================
+
+// PLAYER
+struct Player {
+    // State
+    glm::vec3 position = glm::vec3(0.0f, 30.0f, 0.0f);
+    float velocityY = 0.0f;
+    bool onGround = false;
+    bool creativeMode = false;
+
+    // Properties
+    const float width = 0.6f;
+    const float depth = 0.6f;
+    const float height = 1.8f;
+    const float eyeHeight = 1.6f;
+
+    // Physics Constants
+    const float gravity = 30.0f;
+    const float jumpVelocity = 9.0f;
+};
 
 
+// CAMERA
+struct Camera {
+    // State
+    glm::vec3 position; // Will be updated from Player's position
+    glm::vec3 front = glm::vec3(0.0f, 0.0f, -1.0f);
+    glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+    float yaw = -90.0f;
+    float pitch = 0.0f;
+
+    // Properties
+    const float speed = 10.0f;
+    const float sensitivity = 0.1f;
+    const float maxPitch = 89.0f;
+
+    // Method to be moved from global scope
+    glm::mat4 getViewMatrix() {
+        return glm::lookAt(position, position + front, up);
+    }
+};
 
 
-glm::ivec3 getBlockLocalPosition(glm::ivec3 blockPosition, glm::ivec3 chunkOrigin) {
-    return blockPosition - chunkOrigin;
-}
+// INPUT MANAGERS
+struct InputManager {
+    // Mouse State
+    bool firstMouse = true;
+    float lastX = SCREEN_WIDTH / 2.0f;
+    float lastY = SCREEN_HEIGHT / 2.0f;
 
-Block* getBlock(glm::ivec3 blockPosition) {
+    // Keyboard/Mouse Button State
+    bool spaceWasPressed = false;
+    bool tabWasPressed = false;
+    bool mouseLeftWasPressed = false;
+    bool mouseRightWasPressed = false;
+};
+
+
+// BLOCK
+struct Block{
+    int type = 0; // 0 for air
+};
+
+// CHUNK
+struct Chunk {
+    Block blocks[CHUNK_SIZE][CHUNK_SIZE][CHUNK_SIZE];
+};
+
+// WORLD GEN AND STORING
+struct World {
+    // Data
+    std::unordered_map<glm::ivec3, Chunk> chunkMap;
+    std::unordered_map<glm::ivec3, std::vector<float>> chunkMeshData;
+    std::unordered_map<glm::ivec3, GLuint> chunkVboMap;
+    std::unordered_map<glm::ivec3, GLuint> chunkVaoMap;
+
+    // Configuration
+    int Y_LOAD_DIST = 5;
+    int XZ_LOAD_DIST = 6;
+    int Y_RENDER_DIST = 5;
+    int XZ_RENDER_DIST = 5;
+
+    // Noise Parameters
+    FastNoiseLite noise;
+    int   g_NoiseOctaves    = 4;
+    float g_NoiseGain       = 0.3f;
+    float g_NoiseLacunarity = 2.1f;
+    float g_NoiseFrequency  = 0.01f;
+    float amplitude         = 10.0f;
+    int   g_NoiseSeed       = 133;
+
+    // Methods
+    Block* getBlock(glm::ivec3 blockPosition);
+    void setBlock(glm::ivec3 blockPosition, int type);
+    glm::ivec3 getChunkOrigin(glm::ivec3 blockPosition);
+};
+
+Block* World::getBlock(glm::ivec3 blockPosition) {
     glm::ivec3 chunkCoord = getChunkOrigin(blockPosition);
+
 
     // Check if the chunk exists
     auto it = chunkMap.find(chunkCoord);
@@ -314,459 +275,535 @@ Block* getBlock(glm::ivec3 blockPosition) {
         return nullptr; // Chunk not found
     }
 
+    glm::ivec3 localPos = blockPosition - chunkCoord;
     // Chunk exists, now get the block's local position
-    glm::ivec3 localPos = getBlockLocalPosition(blockPosition, chunkCoord);
+    if (localPos.x < 0 || localPos.x >= CHUNK_SIZE ||
+        localPos.y < 0 || localPos.y >= CHUNK_SIZE ||
+        localPos.z < 0 || localPos.z >= CHUNK_SIZE){ 
+        return nullptr;
+    }
 
     return &it->second.blocks[localPos.x][localPos.y][localPos.z];
 }
-
-void mouse_callback(GLFWwindow* window, double xpos, double ypos){
-    if(firstMouse){
-        lastX = xpos;
-        lastY = ypos;
-        firstMouse = false;
-    }
-
-    float xoffset = xpos - lastX;
-    float yoffset = lastY - ypos;
-    lastX = xpos;
-    lastY = ypos;
-
-    xoffset *= mouseSensitivity;
-    yoffset *= mouseSensitivity;
-
-    yaw += xoffset;
-    pitch += yoffset;
-
-    if(pitch > MAX_PITCH){
-        pitch = MAX_PITCH;
-    }
-    if(pitch < -MAX_PITCH){
-        pitch = -MAX_PITCH;
-    }
-        
-    glm::vec3 direction;
-    direction.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-    direction.y = sin(glm::radians(pitch));
-    direction.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-
-    cameraFront = glm::normalize(direction);
-}
-
-void processInput(GLFWwindow* window){
-
-    float speed = cameraSpeed * deltaTime;
-
-    //close window
-    if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS){
-        glfwSetWindowShouldClose(window, true);
-    }
-
-    //camera controls    
-    glm::vec3 front = cameraFront;
-    front.y = 0.0f;
-    front = glm::normalize(front);
-    glm::vec3 right = glm::normalize(glm::cross(front, cameraUp));
-
-    //nerf movement in air
-    if (onGround){
-        MOVE_SCALE = 1.0f;
-    }
-    else{
-        MOVE_SCALE = 0.5f;
-    }
-    
-    // toggle mouse lock
-    tabIsPressed = glfwGetKey(window, GLFW_KEY_TAB) == GLFW_PRESS;
-    if (tabIsPressed && !tabWasPressed) {
-        int mode = glfwGetInputMode(window, GLFW_CURSOR);
-        if (mode == GLFW_CURSOR_DISABLED) {
-            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-            firstMouse = true; // reset mouse for next lock
-        } else {
-            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-            firstMouse = true; // reset mouse for next lock
-        }
-    }
-    tabWasPressed = tabIsPressed;
-
-    // WSAD movement
-    glm::vec3 nextPlayerPosition = playerPosition;
-    glm::vec3 xz_movement = glm::vec3(0.0f); // Store intended movement
-    if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS){
-        xz_movement += front * speed * MOVE_SCALE;
-    }
-    if(glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS){
-        xz_movement -= front * speed * MOVE_SCALE;
-    }
-    if(glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS){
-        xz_movement += right * speed * MOVE_SCALE;
-    }    
-    if(glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS){
-        xz_movement -= right * speed * MOVE_SCALE;
-    }     
-
-    nextPlayerPosition = playerPosition + xz_movement;
-    if(!CreativeMode){
-        auto nextpos = resolveXZCollision(nextPlayerPosition, xz_movement);
-        if (getChunkOrigin(nextpos)!=getChunkOrigin(playerPosition)){
-            chunkChange = true;
-        }
-        playerPosition = nextpos;
-    }
-    else{
-        playerPosition = nextPlayerPosition;
-    }
-
-    if(!CreativeMode){
-        // jump
-        spaceIsPressed = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
-        if( spaceIsPressed && !spaceWasPressed && onGround){
-            velocity += jumpVelocity;
-            onGround = false;
-        }
-        spaceWasPressed = spaceIsPressed;        
-    }
-    else{
-        //creative mode movement
-        glm::vec3 nextPlayerPosition = playerPosition;
-        glm::vec3 y_movement = glm::vec3(0.0f); 
-        if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
-            y_movement.y += speed;
-        }
-        if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
-            y_movement.y -= speed;
-        }
-        nextPlayerPosition = playerPosition + y_movement;
-        playerPosition = nextPlayerPosition;      
-    }
-
-
-    // block removal
-    mouseLeftIsPressed = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
-    if ( mouseLeftIsPressed && !mouseLeftWasPressed && selectedBlock != glm::ivec3(INT_MAX, INT_MAX, INT_MAX) ) {
-        Block* block_to_remove = getBlock(selectedBlock);
-        if (block_to_remove != nullptr && block_to_remove->type != 0) {
-            block_to_remove->type = 0; // Set to air
-            calculateChunkAndNeighbors(selectedBlock);
-        }
-    }
-    mouseLeftWasPressed = mouseLeftIsPressed;
-
-    // block placement
-    mouseRightIsPressed = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
-    if ( mouseRightIsPressed && !mouseRightWasPressed && previousBlock != glm::ivec3(INT_MAX, INT_MAX, INT_MAX) && selectedBlock != glm::ivec3(INT_MAX, INT_MAX, INT_MAX) ) {
-        glm::ivec3 chunkCoord = getChunkOrigin(previousBlock);
-        glm::ivec3 localPos = getBlockLocalPosition(previousBlock, chunkCoord);
-        
-        chunkMap[chunkCoord].blocks[localPos.x][localPos.y][localPos.z].type = 1; // Or whatever type you want to place
-        calculateChunkAndNeighbors(previousBlock);
-    }
-    mouseRightWasPressed = mouseRightIsPressed;
-}
-
-void framebuffer_size_callback(GLFWwindow* window, int width, int height){
-    glViewport(0, 0, width, height);
-} 
-
-void renderImGui() {
-    // ImGui setup
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-
-    // Player Info Window
-    ImGui::Begin("Player Info");
-    ImGui::Text("Position: %.2f, %.2f, %.2f", playerPosition.x, playerPosition.y, playerPosition.z);
-    ImGui::Text("On Ground: %s", onGround ? "Yes" : "No");
-    ImGui::Text("Velocity: %.2f", velocity);
-    
-    
-    // Creative Mode Toggle
-    ImGui::Checkbox("Creative Mode", &CreativeMode);
-    
-    // FPS Meter
-    ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
-    ImGui::End();
-
-    // Render ImGui
-    ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-}
-
-bool boxBoxOverlap(BoundingBox playerBox, BoundingBox blockBox){
-    return ((playerBox.min.x <= blockBox.max.x && playerBox.max.x >= blockBox.min.x) and
-            (playerBox.min.y <= blockBox.max.y && playerBox.max.y >= blockBox.min.y) and
-            (playerBox.min.z <= blockBox.max.z && playerBox.max.z >= blockBox.min.z));    
-}
-
-glm::vec3 resolveYCollision(glm::vec3& p_nextPlayerPosition, glm::vec3 y_movement) {
-
-    nextPlayerBox.max.x = p_nextPlayerPosition.x + (playerWidth/2);
-    nextPlayerBox.max.y = p_nextPlayerPosition.y + playerHeight;
-    nextPlayerBox.max.z = p_nextPlayerPosition.z + (playerDepth/2);
-
-    nextPlayerBox.min.x = p_nextPlayerPosition.x - (playerWidth/2);
-    nextPlayerBox.min.y = p_nextPlayerPosition.y;
-    nextPlayerBox.min.z = p_nextPlayerPosition.z - (playerDepth/2);
-
-
-    int max_x = (int)glm::ceil(nextPlayerBox.max.x + margin);
-    int max_y = (int)glm::ceil(nextPlayerBox.max.y + margin);
-    int max_z = (int)glm::ceil(nextPlayerBox.max.z + margin);
-
-    int min_x = (int)glm::floor(nextPlayerBox.min.x - margin);
-    int min_y = (int)glm::floor(nextPlayerBox.min.y - margin);
-    int min_z = (int)glm::floor(nextPlayerBox.min.z - margin);
-
-    onGround = false; 
-
-    for(int x = min_x; x< max_x; x++){
-        for(int y = min_y; y< max_y; y++){
-            for(int z = min_z; z< max_z; z++){
-                Block* potential_block = getBlock(glm::ivec3(x, y, z));
-                if (potential_block != nullptr && potential_block->type != 0) {
-                    BoundingBox blockBox;
-                    blockBox.max = glm::vec3(x + BLOCK_SIZE/2, y + BLOCK_SIZE/2 + gap, z + BLOCK_SIZE/2); 
-                    blockBox.min = glm::vec3(x - BLOCK_SIZE/2, y - BLOCK_SIZE/2 - gap, z - BLOCK_SIZE/2);
-                    if (boxBoxOverlap(nextPlayerBox, blockBox)){
-                        velocity = 0.0f;
-                        if (y_movement.y > 0) {  // Moving Down
-                            p_nextPlayerPosition.y = blockBox.min.y - playerHeight;
-                        }
-                        else {  // Moving Up
-                            p_nextPlayerPosition.y = blockBox.max.y; 
-                            onGround = true;
-                        }
-                        break;
-                    }                        
-                }
-            }
-        }
-    }
-    
-    return p_nextPlayerPosition;
-}
-
-glm::vec3 resolveXZCollision(glm::vec3 p_nextPlayerPosition, glm::vec3 p_velocity) {
-    // Resolve X-axis collision
-    if (p_velocity.x != 0) {
-        nextPlayerBox.max.x = p_nextPlayerPosition.x + (playerWidth / 2);
-        nextPlayerBox.min.x = p_nextPlayerPosition.x - (playerWidth / 2);
-        nextPlayerBox.max.y = playerPosition.y + playerHeight;
-        nextPlayerBox.min.y = playerPosition.y;
-        nextPlayerBox.max.z = playerPosition.z + (playerDepth / 2);
-        nextPlayerBox.min.z = playerPosition.z - (playerDepth / 2);
-
-        int max_x = (int)glm::ceil(nextPlayerBox.max.x + margin);
-        int max_y = (int)glm::ceil(nextPlayerBox.max.y + margin);
-        int max_z = (int)glm::ceil(nextPlayerBox.max.z + margin);
-        int min_x = (int)glm::floor(nextPlayerBox.min.x - margin);
-        int min_y = (int)glm::floor(nextPlayerBox.min.y - margin);
-        int min_z = (int)glm::floor(nextPlayerBox.min.z - margin);
-
-        for (int x = min_x; x < max_x; x++) {
-            for (int y = min_y; y < max_y; y++) {
-                for (int z = min_z; z < max_z; z++) {
-                    Block* potential_block = getBlock(glm::ivec3(x, y, z));
-                    if (potential_block != nullptr && potential_block->type != 0) {                    
-                        BoundingBox blockBox;
-                        blockBox.max = glm::vec3(x + BLOCK_SIZE / 2 + gap, y + BLOCK_SIZE / 2, z + BLOCK_SIZE / 2);
-                        blockBox.min = glm::vec3(x - BLOCK_SIZE / 2 - gap, y - BLOCK_SIZE / 2, z - BLOCK_SIZE / 2);
-                        if (boxBoxOverlap(nextPlayerBox, blockBox)) {
-                            if (p_velocity.x > 0) { // Moving right
-                                p_nextPlayerPosition.x = blockBox.min.x - playerWidth / 2;
-                            } else { // Moving left
-                                p_nextPlayerPosition.x = blockBox.max.x + playerWidth / 2;
-                            }
-                            goto resolve_z; // Move to Z resolution, cause at a time we can only have one collisoin along an axis, which is the closest to the player same for z
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-resolve_z:
-    // Resolve Z-axis collision
-    if (p_velocity.z != 0) {
-        nextPlayerBox.max.x = p_nextPlayerPosition.x + (playerWidth / 2);
-        nextPlayerBox.min.x = p_nextPlayerPosition.x - (playerWidth / 2);
-        nextPlayerBox.max.y = playerPosition.y + playerHeight;
-        nextPlayerBox.min.y = playerPosition.y;
-        nextPlayerBox.max.z = p_nextPlayerPosition.z + (playerDepth / 2);
-        nextPlayerBox.min.z = p_nextPlayerPosition.z - (playerDepth / 2);
-
-        int max_x = (int)glm::ceil(nextPlayerBox.max.x + margin);
-        int max_y = (int)glm::ceil(nextPlayerBox.max.y + margin);
-        int max_z = (int)glm::ceil(nextPlayerBox.max.z + margin);
-        int min_x = (int)glm::floor(nextPlayerBox.min.x - margin);
-        int min_y = (int)glm::floor(nextPlayerBox.min.y - margin);
-        int min_z = (int)glm::floor(nextPlayerBox.min.z - margin);
-
-        for (int x = min_x; x < max_x; x++) {
-            for (int y = min_y; y < max_y; y++) {
-                for (int z = min_z; z < max_z; z++) {
-                    Block* potential_block = getBlock(glm::ivec3(x, y, z));
-                    if (potential_block != nullptr && potential_block->type != 0) {                    
-                        BoundingBox blockBox;
-                        blockBox.max = glm::vec3(x + BLOCK_SIZE / 2, y + BLOCK_SIZE / 2, z + BLOCK_SIZE / 2 + gap);
-                        blockBox.min = glm::vec3(x - BLOCK_SIZE / 2, y - BLOCK_SIZE / 2, z - BLOCK_SIZE / 2 - gap);
-                        if (boxBoxOverlap(nextPlayerBox, blockBox)) {
-                           if (p_velocity.z > 0) { // Moving forward
-                                p_nextPlayerPosition.z = blockBox.min.z - playerDepth / 2;
-                            } else { // Moving backward
-                                p_nextPlayerPosition.z = blockBox.max.z + playerDepth / 2;
-                            }
-                            goto end_resolve; // End resolution
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-end_resolve:
-    return p_nextPlayerPosition;
-}
-
-void rayCast(glm::vec3 cameraFront){
-        // RayCasting to select blocks
-        glm::vec3 rayDirection = glm::normalize(cameraFront); // unit vector in the direction of the camera
-        glm::vec3 rayOrigin = cameraPos;
-     
-        float closestHit = rayEnd;
-        glm::ivec3 bestHit = glm::ivec3(INT_MAX);
-        glm::ivec3 bestPrev = glm::ivec3(INT_MAX);
-
-        
-        for (const auto& offset : rayStarts) {
-            glm::vec3 curRayOrigin = rayOrigin + offset; // Adjust ray start based on offset
-            glm::ivec3 prevBlockThisRay = glm::ivec3(INT_MAX); // Reset previous block to an unlikely value
-            for (float i = rayStart; i < rayEnd; i += rayStep) {
-                glm::vec3 point = curRayOrigin + rayDirection * i; 
-                glm::ivec3 blockPosition = glm::ivec3(glm::round(point));
-                Block* hitBlock = getBlock(blockPosition);
-                if (hitBlock != nullptr && hitBlock->type != 0) {
-                    if (i < closestHit){
-                        closestHit = i; 
-                        bestHit = blockPosition;
-
-                        BoundingBox prevBlockBox;
-                        prevBlockBox.min = glm::vec3(prevBlockThisRay) - glm::vec3(0.5f);
-                        prevBlockBox.max = glm::vec3(prevBlockThisRay) + glm::vec3(0.5f);                        
-
-                        BoundingBox playerBox;
-                        playerBox.min = playerPosition + glm::vec3(-playerWidth / 2.0f, 0.0f, -playerDepth / 2.0f);
-                        playerBox.max = playerPosition + glm::vec3(playerWidth / 2.0f, playerHeight, playerDepth / 2.0f);                        
-
-                        //cannot be previous block(block to be placed) if block overlaps with players bounding box
-                        if (!boxBoxOverlap(playerBox, prevBlockBox)) {
-                            bestPrev = prevBlockThisRay; // Store the previous block position
-                        }
-                        else {
-                            bestPrev = glm::ivec3(INT_MAX); 
-                        }
-
-                        // Stop when we hit a block                        
-                        break; 
-                    }
-                }
-                prevBlockThisRay = blockPosition;            
-            }
-        }
-        selectedBlock = bestHit;
-        previousBlock = bestPrev;
-        // The closest Block could still not be face alligned, So check its manhatten distance to the previous block
-        glm::ivec3 delta = selectedBlock - previousBlock;
-
-        // check if manhattan distance is 1 to ensure block is face alligned
-        if (abs(delta.x) + abs(delta.y) + abs(delta.z) != 1) {
-            previousBlock = glm::ivec3(INT_MAX); // Invalid for placement
-        }        
-}
-
-std::vector<int> validFaces(glm::ivec3 block) {
-    std::vector<int> visibleFaces;
-    glm::ivec3 directions[6] = {
-        glm::ivec3(0, 1, 0),    // Top face
-        glm::ivec3(0, 0, -1),   // Front face
-        glm::ivec3(-1, 0, 0),   // Right face
-        glm::ivec3(0, 0, 1),    // Back face
-        glm::ivec3(1, 0, 0),    // Left face
-        glm::ivec3(0, -1, 0)    // Bottom face
-    };    
-    for (int i = 0; i < 6; ++i) {
-        glm::ivec3 neighbor = block + directions[i];
-        Block* neighborBlock = getBlock(neighbor);
-        if (neighborBlock == nullptr || neighborBlock->type == 0) { // If chunk doesn't exist or block is air
-            visibleFaces.push_back(i);
-        }
-    }
-    return visibleFaces;
-}
-
-glm::ivec3 getChunkOrigin(glm::ivec3 blockPosition) {
+glm::ivec3 World::getChunkOrigin(glm::ivec3 blockPosition) {
     return glm::ivec3(
         floor(blockPosition.x / (float)CHUNK_SIZE) * CHUNK_SIZE,
         floor(blockPosition.y / (float)CHUNK_SIZE) * CHUNK_SIZE,
         floor(blockPosition.z / (float)CHUNK_SIZE) * CHUNK_SIZE
     );
 }
+void World::setBlock(glm::ivec3 blockPosition, int type) {
+    glm::ivec3 chunkCoord = getChunkOrigin(blockPosition);
+    // Find the chunk in the map. If it exists, modify it.
+    auto it = chunkMap.find(chunkCoord);
+    if (it != chunkMap.end()) {
+        glm::ivec3 localPos = blockPosition - chunkCoord;
+        it->second.blocks[localPos.x][localPos.y][localPos.z].type = type;
+    }
+}
 
-void calculateChunk(glm::ivec3 block){
-    glm::ivec3 chunkCoord = getChunkOrigin(block);
+//================================================================================
+// The Main Game Class
+//================================================================================
 
-    float size = chunks[chunkCoord].size() / 7 ;
-    chunks[chunkCoord].clear();
-    Chunk& chunk = chunkMap[chunkCoord];
+class Game {
+public:
+    Game();
+    void init();
+    void run();
+    void cleanup();
+
+private:
+    // Game Components
+    Player m_player;
+    Camera m_camera;
+    InputManager m_input;
+    World m_world;
+
+    // Window and Timing
+    GLFWwindow* m_window;
+    float m_deltaTime = 0.0f;
+    float m_lastFrame = 0.0f;
+    bool m_chunkChange = false;
+
+    // Shaders and Render Objects
+    std::unique_ptr<Shader> m_chunkShader;       
+    std::unique_ptr<Shader> m_selectedBlockShader; 
+    GLuint m_textureAtlas;
+    GLuint m_selectedBlockVao, m_selectedBlockVbo;
+
+    // Raycasting State (as per your request)
+    glm::ivec3 m_selectedBlock;
+    glm::ivec3 m_previousBlock;
+
+    // Raycasting Configuration
+    const float m_rayStart = 0.1f;
+    const float m_rayEnd = 4.0f;
+    const float m_rayStep = 0.1f;
+    const std::vector<glm::vec3> m_rayStarts = {
+        glm::vec3(0), glm::vec3(0.05f, 0, 0), glm::vec3(-0.05f, 0, 0),
+        glm::vec3(0, 0.05f, 0), glm::vec3(0, -0.05f, 0), glm::vec3(0, 0, 0.05f),
+        glm::vec3(0, 0, -0.05f)
+    };
+
+    // Collision constants
+    const float m_collisionGap = 0.01f;
+    const float m_collisionMargin = 0.5f;
+
+    // Core Methods
+    void processInput();
+    void update();
+    void render();
+    void renderImGui();
+
+    // Logic Methods
+    void updatePhysics();
+    void performRaycasting();
+    void generateTerrain();
+    void calculateChunk(glm::ivec3 chunkCoord);
+    void calculateChunkAndNeighbors(glm::ivec3 block);
+    std::vector<int> getVisibleFaces(glm::ivec3 block);
+
+    // Collision
+    bool boxBoxOverlap(const BoundingBox& playerBox, const BoundingBox& blockBox) const;
+    glm::vec3 resolveYCollision(glm::vec3 nextPlayerPos, glm::vec3 yMovement);
+    glm::vec3 resolveXZCollision(glm::vec3 nextPlayerPos, glm::vec3 xzMovement);
+
+    // Initialization Helpers
+    void initGlfw();
+    void initGlad();
+    void initImGui();
+    void initShaders();
+    void initTextures();
+    void initRenderObjects();
+
+    // Callback Methods
+    void onMouseMovement(double xpos, double ypos);
+    static void framebuffer_size_callback(GLFWwindow* window, int width, int height);
+    static void mouse_callback_router(GLFWwindow* window, double xpos, double ypos);
+};
+
+
+int main() {
+    Game game;
+    std::cout<<"Constructor";
+    game.init();
+    std::cout<<"init";    
+    game.run();
+    std::cout<<"run";    
+    game.cleanup();
+    return 0;
+}
+
+
+void Game::processInput() {
+    // Window and Mouse Lock
+    if (glfwGetKey(m_window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+        glfwSetWindowShouldClose(m_window, true);
+    }
+
+    // toggle mouse lock
+    bool tabIsPressed = glfwGetKey(m_window, GLFW_KEY_TAB) == GLFW_PRESS;
+    if (tabIsPressed && !m_input.tabWasPressed) {
+        int mode = glfwGetInputMode(m_window, GLFW_CURSOR);
+        if (mode == GLFW_CURSOR_DISABLED) {
+            glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        } else {
+            glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        }
+        m_input.firstMouse = true;
+    }
+    m_input.tabWasPressed = tabIsPressed;
+
+    // --- Movement ---
+    float speed = m_camera.speed * m_deltaTime;
+    float currentMoveScale = (m_player.onGround || m_player.creativeMode) ? 1.0f : 0.5f;
+
+    glm::vec3 front = m_camera.front;
+    front.y = 0.0f;
+    if (glm::length(front) > 0.0f) { // Avoid normalization of zero vector
+        front = glm::normalize(front);
+    }
+    glm::vec3 right = glm::normalize(glm::cross(front, m_camera.up));
+
+    glm::vec3 xz_movement(0.0f);
+
+    // WSAD movement
+    if (glfwGetKey(m_window, GLFW_KEY_W) == GLFW_PRESS){
+        xz_movement += front * speed * currentMoveScale;
+    }
+    if (glfwGetKey(m_window, GLFW_KEY_S) == GLFW_PRESS){
+        xz_movement -= front * speed * currentMoveScale;
+    }
+    if (glfwGetKey(m_window, GLFW_KEY_D) == GLFW_PRESS){
+        xz_movement += right * speed * currentMoveScale;
+    }
+    if (glfwGetKey(m_window, GLFW_KEY_A) == GLFW_PRESS){
+        xz_movement -= right * speed * currentMoveScale;
+    }
+    
+    glm::vec3 oldPos = m_player.position;
+    if (!m_player.creativeMode) {
+        m_player.position = resolveXZCollision(m_player.position + xz_movement, xz_movement);
+    } 
+    else {
+        m_player.position += xz_movement;
+        if (glfwGetKey(m_window, GLFW_KEY_SPACE) == GLFW_PRESS){
+            m_player.position.y += speed;
+        }
+        if (glfwGetKey(m_window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS){
+            m_player.position.y -= speed;
+        }
+    }
+
+    if (m_world.getChunkOrigin(m_player.position) != m_world.getChunkOrigin(oldPos)) {
+        m_chunkChange = true;
+    }
+
+    // Jump
+    bool spaceIsPressed = glfwGetKey(m_window, GLFW_KEY_SPACE) == GLFW_PRESS;
+    if (!m_player.creativeMode && spaceIsPressed && !m_input.spaceWasPressed && m_player.onGround) {
+        m_player.velocityY += m_player.jumpVelocity;
+        m_player.onGround = false;
+    }
+    m_input.spaceWasPressed = spaceIsPressed;
+
+    // Block Removal
+    bool mouseLeftIsPressed = glfwGetMouseButton(m_window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+    if (mouseLeftIsPressed && !m_input.mouseLeftWasPressed && m_selectedBlock != glm::ivec3(INT_MAX)) {
+        Block* block = m_world.getBlock(m_selectedBlock);
+        if(block && block->type != 0) { // Check if block exists and is not air
+            m_world.setBlock(m_selectedBlock, 0); // Set to air
+            calculateChunkAndNeighbors(m_selectedBlock);
+        }
+    }
+    m_input.mouseLeftWasPressed = mouseLeftIsPressed;
+
+    // Block Placement
+    bool mouseRightIsPressed = glfwGetMouseButton(m_window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
+    if (mouseRightIsPressed && !m_input.mouseRightWasPressed && m_previousBlock != glm::ivec3(INT_MAX)) {
+        m_world.setBlock(m_previousBlock, 1); 
+        calculateChunkAndNeighbors(m_previousBlock);
+    }
+    m_input.mouseRightWasPressed = mouseRightIsPressed;
+}
+
+void Game::update() {
+    if (!m_player.creativeMode) {
+        updatePhysics();
+    }
+    if (m_chunkChange) {
+        generateTerrain();
+        m_chunkChange = false;
+    }
+    // Update camera position to follow player's eyes
+    m_camera.position = m_player.position + glm::vec3(0.0f, m_player.eyeHeight, 0.0f);
+    performRaycasting();
+}
+
+void Game::render() {
+    // Clear screen
+    glClearColor(0.529f, 0.808f, 0.922f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // Get current window size
+    int curWidth, curHeight;
+    glfwGetFramebufferSize(m_window, &curWidth, &curHeight);
+    
+    // Create view and projection matrices
+    glm::mat4 view = m_camera.getViewMatrix();
+    glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)curWidth / (float)curHeight, 0.1f, 5000.0f);
+
+    // --- Render World Chunks ---
+    m_chunkShader->use();
+    m_chunkShader->setMat4("view", view);
+    m_chunkShader->setMat4("projection", projection);
+    m_chunkShader->setMat4("model", glm::mat4(1.0f));
+
+    // Bind texture atlas
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, m_textureAtlas);
+
+    // Iterate through chunks within render distance of the player
+    glm::ivec3 playerChunk = m_world.getChunkOrigin(glm::round(m_player.position));
+    for (int cx = -m_world.XZ_RENDER_DIST; cx <= m_world.XZ_RENDER_DIST; cx++) {
+        for (int cy = -m_world.Y_RENDER_DIST; cy <= m_world.Y_RENDER_DIST; cy++) {
+            for (int cz = -m_world.XZ_RENDER_DIST; cz <= m_world.XZ_RENDER_DIST; cz++) {
+                // Cylindrical render distance check
+                if (cx * cx + cz * cz > m_world.XZ_RENDER_DIST * m_world.XZ_RENDER_DIST) {
+                    continue;
+                }
+                
+                glm::ivec3 chunkOrigin = playerChunk + glm::ivec3(cx, cy, cz) * CHUNK_SIZE;
+
+                // Check if the chunk has a VAO and mesh data to render
+                if (m_world.chunkVaoMap.count(chunkOrigin) && m_world.chunkMeshData.count(chunkOrigin)) {
+                    glBindVertexArray(m_world.chunkVaoMap.at(chunkOrigin));
+                    glDrawArrays(GL_TRIANGLES, 0, m_world.chunkMeshData.at(chunkOrigin).size() / 7);
+                }
+            }
+        }
+    }
+    
+    // --- Render Selected Block Highlight ---
+    if (m_selectedBlock != glm::ivec3(INT_MAX) && !m_player.creativeMode){
+        m_selectedBlockShader->use();
+        Block* block = m_world.getBlock(m_selectedBlock);
+        if (block) { // Ensure block exists before trying to render it
+            m_selectedBlockShader->setInt("blockType", block->type);
+
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::translate(model, glm::vec3(m_selectedBlock));
+            model = glm::scale(model, glm::vec3(1.001f)); // Slightly larger to avoid z-fighting
+
+            m_selectedBlockShader->setMat4("model", model);
+            m_selectedBlockShader->setMat4("view", view);
+            m_selectedBlockShader->setMat4("projection", projection);
+            
+            glBindVertexArray(m_selectedBlockVao);
+            glDrawArrays(GL_TRIANGLES, 0, 36); // A cube has 36 vertices
+        }
+    }
+    
+    // Render the ImGui overlay
+    renderImGui();
+}
+
+void Game::renderImGui() {
+    // Start the Dear ImGui frame
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    // Create a simple window
+    ImGui::Begin("Player Info");
+    ImGui::Text("Position: %.2f, %.2f, %.2f", m_player.position.x, m_player.position.y, m_player.position.z);
+    glm::ivec3 pChunk = m_world.getChunkOrigin(glm::round(m_player.position));
+    ImGui::Text("Chunk: %d, %d, %d", pChunk.x, pChunk.y, pChunk.z);
+    ImGui::Text("On Ground: %s", m_player.onGround ? "Yes" : "No");
+    ImGui::Text("Velocity Y: %.2f", m_player.velocityY);
+    ImGui::Checkbox("Creative Mode", &m_player.creativeMode);
+    ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+    ImGui::End();
+
+    // Render ImGui draw data
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+
+void Game::updatePhysics() {
+    // Apply gravity if not on the ground
+    if (!m_player.onGround) {
+        m_player.velocityY -= m_player.gravity * m_deltaTime;
+        // Terminal velocity
+        if (m_player.velocityY < -50.0f) {
+            m_player.velocityY = -50.0f;
+        }
+    }
+
+    glm::vec3 y_movement = glm::vec3(0.0f, m_player.velocityY * m_deltaTime, 0.0f);
+    glm::vec3 nextPlayerPosition = m_player.position + y_movement;
+    
+    glm::vec3 oldPos = m_player.position;
+    m_player.position = resolveYCollision(nextPlayerPosition, y_movement);
+
+    // Check if player crossed a chunk boundary after physics update
+    if (m_world.getChunkOrigin(m_player.position) != m_world.getChunkOrigin(oldPos)) {
+        m_chunkChange = true;
+    }
+}
+
+void Game::performRaycasting() {
+    glm::vec3 rayDirection = glm::normalize(m_camera.front);
+    glm::vec3 rayOrigin = m_camera.position;
+ 
+    float closestHit = m_rayEnd;
+    glm::ivec3 bestHit = glm::ivec3(INT_MAX);
+    glm::ivec3 bestPrev = glm::ivec3(INT_MAX);
+
+    for (const auto& offset : m_rayStarts) {
+        glm::vec3 curRayOrigin = rayOrigin + offset; // Adjust ray start based on offset
+        glm::ivec3 prevBlockThisRay = glm::ivec3(INT_MAX); // Reset previous block to an unlikely value
+
+        for (float i = m_rayStart; i < closestHit; i += m_rayStep) {
+            glm::vec3 point = curRayOrigin + rayDirection * i; 
+            glm::ivec3 blockPosition = glm::ivec3(glm::round(point));
+            
+            if(blockPosition == prevBlockThisRay) continue;
+
+            Block* hitBlock = m_world.getBlock(blockPosition);
+            if (hitBlock && hitBlock->type != 0) {
+                // We hit a non-air block
+                if (i < closestHit){
+                    closestHit = i; 
+                    bestHit = blockPosition;
+
+                    // Check if the previous block is valid for placement
+                    BoundingBox prevBlockBox;
+                    prevBlockBox.min = glm::vec3(prevBlockThisRay) - glm::vec3(0.5f);
+                    prevBlockBox.max = glm::vec3(prevBlockThisRay) + glm::vec3(0.5f);                        
+
+                    BoundingBox playerBox;
+                    playerBox.min = m_player.position + glm::vec3(-m_player.width / 2.0f, 0.0f, -m_player.depth / 2.0f);
+                    playerBox.max = m_player.position + glm::vec3(m_player.width / 2.0f, m_player.height, m_player.depth / 2.0f);                        
+                    
+                    //cannot be previous block(block to be placed) if block overlaps with players bounding box
+                    if (!boxBoxOverlap(playerBox, prevBlockBox)) {
+                        bestPrev = prevBlockThisRay;
+                    } else {
+                        bestPrev = glm::ivec3(INT_MAX); // Invalid if player would be inside it
+                    }
+                    break; // Found the closest hit for this thickened ray, move to the next
+                }
+            }
+            prevBlockThisRay = blockPosition;            
+        }
+    }
+    
+    // Set the final results as member variables
+    this->m_selectedBlock = bestHit;
+    this->m_previousBlock = bestPrev;
+
+    if (m_selectedBlock == glm::ivec3(INT_MAX) || m_previousBlock == glm::ivec3(INT_MAX)) return;
+
+    // The closest Block could still not be face alligned, So check its manhatten distance to the previous block
+    glm::ivec3 delta = m_selectedBlock - m_previousBlock;
+    if (abs(delta.x) + abs(delta.y) + abs(delta.z) != 1) {
+        this->m_previousBlock = glm::ivec3(INT_MAX);
+    }        
+}
+
+void Game::generateTerrain() {
+    std::vector<glm::ivec3> newChunksToMesh;
+    glm::ivec3 playerChunkOrigin = m_world.getChunkOrigin(glm::round(m_player.position));
+
+    for (int cx = -m_world.XZ_LOAD_DIST; cx <= m_world.XZ_LOAD_DIST; cx++) {
+        for (int cy = -m_world.Y_LOAD_DIST; cy <= m_world.Y_LOAD_DIST; cy++) {
+            for (int cz = -m_world.XZ_LOAD_DIST; cz <= m_world.XZ_LOAD_DIST; cz++) {
+                // Use cylindrical distance
+                if (cx * cx + cz * cz > m_world.XZ_LOAD_DIST * m_world.XZ_LOAD_DIST) {
+                    continue;
+                }
+                
+                glm::ivec3 chunkOrigin = playerChunkOrigin + glm::ivec3(cx, cy, cz) * CHUNK_SIZE;
+                // If chunk data already exists, skip it
+                if (m_world.chunkMap.count(chunkOrigin)) {
+                    continue;
+                }
+                
+                // Chunk does not exist, so generate its block data
+                Chunk& currentChunk = m_world.chunkMap[chunkOrigin];
+                newChunksToMesh.push_back(chunkOrigin);
+
+                for (int x = 0; x < CHUNK_SIZE; x++) {
+                    for (int z = 0; z < CHUNK_SIZE; z++) {
+                        float globalX = (float)(chunkOrigin.x + x);
+                        float globalZ = (float)(chunkOrigin.z + z);
+                        float height = m_world.noise.GetNoise(globalX, globalZ);
+                        height = (height + 1.0f) * m_world.amplitude; // Scale noise to 0-2*amp
+                        height = glm::round(height);
+
+                        for (int y = 0; y < CHUNK_SIZE; y++) {
+                            int globalY = chunkOrigin.y + y;
+                            if (globalY > height) {
+                                currentChunk.blocks[x][y][z].type = 0; // Air
+                            } else if (globalY == (int)height) {
+                                currentChunk.blocks[x][y][z].type = 1; // Grass
+                            } else if (globalY >= height - 5) {
+                                currentChunk.blocks[x][y][z].type = 2; // Dirt
+                            } else {
+                                currentChunk.blocks[x][y][z].type = 3; // Stone
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // After generating block data, create the meshes for the new chunks
+    for (const auto& chunkCoord : newChunksToMesh) {
+        calculateChunk(chunkCoord);
+    }
+}
+
+std::vector<int> Game::getVisibleFaces(glm::ivec3 block) {
+    std::vector<int> visibleFaces;
+    // Directions corresponding to face IDs 0 through 5
+    const glm::ivec3 directions[6] = {
+        glm::ivec3(0, 1, 0),    // Top (+Y)
+        glm::ivec3(0, 0, -1),   // Front (-Z)
+        glm::ivec3(-1, 0, 0),   // Right (-X)
+        glm::ivec3(0, 0, 1),    // Back (+Z)
+        glm::ivec3(1, 0, 0),    // Left (+X)
+        glm::ivec3(0, -1, 0)    // Bottom (-Y)
+    };
+
+    for (int i = 0; i < 6; ++i) {
+        glm::ivec3 neighborPos = block + directions[i];
+        Block* neighborBlock = m_world.getBlock(neighborPos);
+
+        if (neighborBlock == nullptr || neighborBlock->type == 0) {// If chunk doesn't exist or block is air
+            visibleFaces.push_back(i);
+        }
+    }
+    return visibleFaces;
+}
+
+void Game::calculateChunk(glm::ivec3 chunkCoord) {
+    // Clear any previous mesh data for this chunk
+    m_world.chunkMeshData[chunkCoord].clear();
+    
+    // Ensure the chunk exists in the map
+    if (m_world.chunkMap.find(chunkCoord) == m_world.chunkMap.end()) {
+        return; // Cannot mesh a chunk that hasn't had its block data generated
+    }
+    Chunk& chunk = m_world.chunkMap.at(chunkCoord);
 
     for (int x = 0; x < CHUNK_SIZE; x++) {
         for (int y = 0; y < CHUNK_SIZE; y++) {
             for (int z = 0; z < CHUNK_SIZE; z++) {
-                if (chunk.blocks[x][y][z].type == 0) continue; // Skip air blocks                
-                glm::ivec3 blockPosition = chunkCoord + glm::ivec3(x, y, z);                         
-                for (int faceID : validFaces(blockPosition)) {
+                if (chunk.blocks[x][y][z].type == 0) continue; // Skip air blocks
+
+                glm::ivec3 blockPosition = chunkCoord + glm::ivec3(x, y, z);
+                
+                for (int faceID : getVisibleFaces(blockPosition)) {
                     const float* curFace = faceVertices[faceID];
                     if (!curFace) continue;
 
                     for (int i = 0; i < 6; ++i) { // 6 vertices per face
-                        int idx = i * 6;
+                        int idx = i * 6; // 6 attributes per vertex in face data
 
+                        // Vertex position 
                         float vx = curFace[idx + 0] + blockPosition.x;
                         float vy = curFace[idx + 1] + blockPosition.y;
                         float vz = curFace[idx + 2] + blockPosition.z;
 
+                        // Texture coordinates
                         float ux = curFace[idx + 3];
                         float uy = curFace[idx + 4];
+                        
+                        // Face ID and Block Type
                         float fid = curFace[idx + 5];
+                        float blockType = static_cast<float>(chunk.blocks[x][y][z].type);
 
-                        float blockType = chunk.blocks[x][y][z].type;
-
-                        chunks[chunkCoord].push_back(vx);
-                        chunks[chunkCoord].push_back(vy);
-                        chunks[chunkCoord].push_back(vz);
-                        chunks[chunkCoord].push_back(ux);
-                        chunks[chunkCoord].push_back(uy);
-                        chunks[chunkCoord].push_back(fid); // faceID stored as float
-                        chunks[chunkCoord].push_back(blockType);             
-                    }   
+                        m_world.chunkMeshData[chunkCoord].insert(m_world.chunkMeshData[chunkCoord].end(), {vx, vy, vz, ux, uy, fid, blockType});
+                    }
                 }
             }
         }
-    }    
-    
+    }
+
     GLuint chunkVAO, chunkVBO;
 
     // Check if the chunk already has a VAO/VBO.
-    if (chunkVAOMap.find(chunkCoord) == chunkVAOMap.end()) {
+    if (m_world.chunkVaoMap.find(chunkCoord) == m_world.chunkVaoMap.end()) {
         // If not, this is a new chunk that just gained its first visible face.
         // Create and configure a new VAO and VBO for it.
         glGenVertexArrays(1, &chunkVAO);
         glGenBuffers(1, &chunkVBO);
-
-        chunkVAOMap[chunkCoord] = chunkVAO;
-        chunkVBOMap[chunkCoord] = chunkVBO;
+        m_world.chunkVaoMap[chunkCoord] = chunkVAO;
+        m_world.chunkVboMap[chunkCoord] = chunkVBO;
 
         glBindVertexArray(chunkVAO);
         glBindBuffer(GL_ARRAY_BUFFER, chunkVBO);
@@ -781,48 +818,274 @@ void calculateChunk(glm::ivec3 block){
         glEnableVertexAttribArray(3); // Block Type
     } else {
         // The chunk already exists, so just get its VBO handle for updating.
-        chunkVBO = chunkVBOMap[chunkCoord];
+        chunkVBO = m_world.chunkVboMap.at(chunkCoord);
         glBindBuffer(GL_ARRAY_BUFFER, chunkVBO);
     }
-    glBufferData(GL_ARRAY_BUFFER, chunks[chunkCoord].size() * sizeof(float), chunks[chunkCoord].data(), GL_DYNAMIC_DRAW);    
+    
+    // Upload the new vertex data to the VBO
+    if (!m_world.chunkMeshData[chunkCoord].empty()) {
+        glBufferData(GL_ARRAY_BUFFER, m_world.chunkMeshData[chunkCoord].size() * sizeof(float), m_world.chunkMeshData[chunkCoord].data(), GL_DYNAMIC_DRAW);
+    }
 }
 
-void calculateChunkAndNeighbors(glm::ivec3 block) {
-    glm::ivec3 chunkCoord = getChunkOrigin(block);
+void Game::calculateChunkAndNeighbors(glm::ivec3 block) {
+    glm::ivec3 chunkCoord = m_world.getChunkOrigin(block);
     glm::ivec3 blockOffset = block - chunkCoord;
-    calculateChunk(block); // always recalc current
 
+    // Always recalculate the mesh for the chunk the block is in
+    calculateChunk(chunkCoord);
 
-    if (blockOffset.x == 0){
-        calculateChunk(block + glm::ivec3(-1, 0, 0));
+    // If the block is on a boundary, the neighbor chunk's mesh is also affected
+    if (blockOffset.x == 0) {
+        calculateChunk(chunkCoord + glm::ivec3(-CHUNK_SIZE, 0, 0));
+    } else if (blockOffset.x == CHUNK_SIZE - 1) {
+        calculateChunk(chunkCoord + glm::ivec3(CHUNK_SIZE, 0, 0));
     }
-    else if (blockOffset.x == CHUNK_SIZE - 1){
-        calculateChunk(block + glm::ivec3(1, 0, 0));
+    
+    if (blockOffset.y == 0) {
+        calculateChunk(chunkCoord + glm::ivec3(0, -CHUNK_SIZE, 0));
+    } else if (blockOffset.y == CHUNK_SIZE - 1) {
+        calculateChunk(chunkCoord + glm::ivec3(0, CHUNK_SIZE, 0));
     }
-    if (blockOffset.y == 0){
-        calculateChunk(block + glm::ivec3(0, -1, 0));
-    }
-    else if (blockOffset.y == CHUNK_SIZE - 1){
-        calculateChunk(block + glm::ivec3(0, 1, 0));
-    }
-    if (blockOffset.z == 0){
-        calculateChunk(block + glm::ivec3(0, 0, -1));
-    }
-    else if (blockOffset.z == CHUNK_SIZE - 1){
-        calculateChunk(block + glm::ivec3(0, 0, 1));
+
+    if (blockOffset.z == 0) {
+        calculateChunk(chunkCoord + glm::ivec3(0, 0, -CHUNK_SIZE));
+    } else if (blockOffset.z == CHUNK_SIZE - 1) {
+        calculateChunk(chunkCoord + glm::ivec3(0, 0, CHUNK_SIZE));
     }
 }
 
-void initializeSelectedBlockBuffer(){
-    glGenVertexArrays(1, &selectedBlockVAO);
-    glGenBuffers(1, &selectedBlockVBO);
+bool Game::boxBoxOverlap(const BoundingBox& box1, const BoundingBox& box2) const {
+    return (box1.min.x <= box2.max.x && box1.max.x >= box2.min.x) &&
+           (box1.min.y <= box2.max.y && box1.max.y >= box2.min.y) &&
+           (box1.min.z <= box2.max.z && box1.max.z >= box2.min.z);
+}
 
-    glBindVertexArray(selectedBlockVAO);
+glm::vec3 Game::resolveYCollision(glm::vec3 nextPlayerPos, glm::vec3 yMovement) {
+    BoundingBox playerBox;
+    playerBox.max = glm::vec3(nextPlayerPos.x + m_player.width / 2, nextPlayerPos.y + m_player.height, nextPlayerPos.z + m_player.depth / 2);
+    playerBox.min = glm::vec3(nextPlayerPos.x - m_player.width / 2, nextPlayerPos.y, nextPlayerPos.z - m_player.depth / 2);
 
-    glBindBuffer(GL_ARRAY_BUFFER, selectedBlockVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);        
+    int max_x = static_cast<int>(glm::ceil(playerBox.max.x + m_collisionMargin));
+    int max_y = static_cast<int>(glm::ceil(playerBox.max.y + m_collisionMargin));
+    int max_z = static_cast<int>(glm::ceil(playerBox.max.z + m_collisionMargin));
+    int min_x = static_cast<int>(glm::floor(playerBox.min.x - m_collisionMargin));
+    int min_y = static_cast<int>(glm::floor(playerBox.min.y - m_collisionMargin));
+    int min_z = static_cast<int>(glm::floor(playerBox.min.z - m_collisionMargin));
 
-    // Position attribute
+    m_player.onGround = false;
+
+    for (int x = min_x; x < max_x; x++) {
+        for (int y = min_y; y < max_y; y++) {
+            for (int z = min_z; z < max_z; z++) {
+                Block* block = m_world.getBlock(glm::ivec3(x, y, z));
+                if (block && block->type != 0) {
+                    BoundingBox blockBox;
+                    blockBox.max = glm::vec3(x + 0.5f, y + 0.5f + m_collisionGap, z + 0.5f);
+                    blockBox.min = glm::vec3(x - 0.5f, y - 0.5f - m_collisionGap, z - 0.5f);
+
+                    if (boxBoxOverlap(playerBox, blockBox)) {
+                        m_player.velocityY = 0.0f;
+                        if (yMovement.y > 0) { // Moving up
+                            nextPlayerPos.y = blockBox.min.y - m_player.height;
+                        } else { // Moving down
+                            nextPlayerPos.y = blockBox.max.y;
+                            m_player.onGround = true;
+                        }
+                        return nextPlayerPos; // Collision handled
+                    }
+                }
+            }
+        }
+    }
+    return nextPlayerPos; // No collision
+}
+
+glm::vec3 Game::resolveXZCollision(glm::vec3 nextPlayerPos, glm::vec3 xzMovement) {
+    glm::vec3 resolvedPos = nextPlayerPos;
+
+    // Resolve X-axis collision
+    if (xzMovement.x != 0) {
+        BoundingBox playerBoxX;
+        playerBoxX.max = glm::vec3(resolvedPos.x + m_player.width / 2, m_player.position.y + m_player.height, m_player.position.z + m_player.depth / 2);
+        playerBoxX.min = glm::vec3(resolvedPos.x - m_player.width / 2, m_player.position.y, m_player.position.z - m_player.depth / 2);
+
+        int max_x = static_cast<int>(glm::ceil(playerBoxX.max.x + m_collisionMargin));
+        int max_y = static_cast<int>(glm::ceil(playerBoxX.max.y + m_collisionMargin));
+        int max_z = static_cast<int>(glm::ceil(playerBoxX.max.z + m_collisionMargin));
+        int min_x = static_cast<int>(glm::floor(playerBoxX.min.x - m_collisionMargin));
+        int min_y = static_cast<int>(glm::floor(playerBoxX.min.y - m_collisionMargin));
+        int min_z = static_cast<int>(glm::floor(playerBoxX.min.z - m_collisionMargin));
+
+        for (int x = min_x; x < max_x; x++) {
+            for (int y = min_y; y < max_y; y++) {
+                for (int z = min_z; z < max_z; z++) {
+                    if (m_world.getBlock({x, y, z}) && m_world.getBlock({x, y, z})->type != 0) {
+                        BoundingBox blockBox;
+                        blockBox.max = glm::vec3(x + 0.5f + m_collisionGap, y + 0.5f, z + 0.5f);
+                        blockBox.min = glm::vec3(x - 0.5f - m_collisionGap, y - 0.5f, z - 0.5f);
+                        if (boxBoxOverlap(playerBoxX, blockBox)) {
+                            if (xzMovement.x > 0) { // Moving right
+                                resolvedPos.x = blockBox.min.x - m_player.width / 2;
+                            } else { // Moving left
+                                resolvedPos.x = blockBox.max.x + m_player.width / 2;
+                            }
+                            goto resolve_z; // Move to Z resolution, cause at a time we can only have one collisoin along an axis, which is the closest to the player same for z
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+resolve_z:
+    // Resolve Z-axis collision
+    if (xzMovement.z != 0) {
+        BoundingBox playerBoxZ;
+        playerBoxZ.max = glm::vec3(resolvedPos.x + m_player.width / 2, m_player.position.y + m_player.height, resolvedPos.z + m_player.depth / 2);
+        playerBoxZ.min = glm::vec3(resolvedPos.x - m_player.width / 2, m_player.position.y, resolvedPos.z - m_player.depth / 2);
+
+        int max_x = static_cast<int>(glm::ceil(playerBoxZ.max.x + m_collisionMargin));
+        int max_y = static_cast<int>(glm::ceil(playerBoxZ.max.y + m_collisionMargin));
+        int max_z = static_cast<int>(glm::ceil(playerBoxZ.max.z + m_collisionMargin));
+        int min_x = static_cast<int>(glm::floor(playerBoxZ.min.x - m_collisionMargin));
+        int min_y = static_cast<int>(glm::floor(playerBoxZ.min.y - m_collisionMargin));
+        int min_z = static_cast<int>(glm::floor(playerBoxZ.min.z - m_collisionMargin));
+
+        for (int x = min_x; x < max_x; x++) {
+            for (int y = min_y; y < max_y; y++) {
+                for (int z = min_z; z < max_z; z++) {
+                    if (m_world.getBlock({x, y, z}) && m_world.getBlock({x, y, z})->type != 0) {
+                        BoundingBox blockBox;
+                        blockBox.max = glm::vec3(x + 0.5f, y + 0.5f, z + 0.5f + m_collisionGap);
+                        blockBox.min = glm::vec3(x - 0.5f, y - 0.5f, z - 0.5f - m_collisionGap);
+                        if (boxBoxOverlap(playerBoxZ, blockBox)) {
+                            if (xzMovement.z > 0) { // Moving forward
+                                resolvedPos.z = blockBox.min.z - m_player.depth / 2;
+                            } else { // Moving backward
+                                resolvedPos.z = blockBox.max.z + m_player.depth / 2;
+                            }
+                            goto end_resolve;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+end_resolve:
+    return resolvedPos;
+}
+
+void Game::initGlfw() {
+    if (!glfwInit()) {
+        std::cerr << "Failed to initialize GLFW" << std::endl;
+        exit(-1);
+    }
+
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    #ifdef __APPLE__
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    #endif
+
+    m_window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Voxel Game", NULL, NULL);
+    if (!m_window) {
+        std::cerr << "Failed to create GLFW window" << std::endl;
+        glfwTerminate();
+        exit(-1);
+    }
+    glfwMakeContextCurrent(m_window);
+
+    // This is the crucial link between the GLFW window and our Game instance
+    glfwSetWindowUserPointer(m_window, this);
+
+    // Set callbacks to our static router functions
+    glfwSetFramebufferSizeCallback(m_window, framebuffer_size_callback);
+    glfwSetCursorPosCallback(m_window, mouse_callback_router);
+
+    // Lock and hide the cursor
+    glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+}
+
+void Game::initGlad() {
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+        std::cerr << "Failed to initialize GLAD" << std::endl;
+        glfwTerminate();
+        exit(-1);
+    }
+}
+
+void Game::initImGui() {
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    ImGui_ImplGlfw_InitForOpenGL(m_window, true);
+    ImGui_ImplOpenGL3_Init("#version 330 core");
+}
+
+void Game::initShaders() {
+    m_chunkShader = std::make_unique<Shader>("shaders/world/shader.vert", "shaders/world/shader.frag");
+    m_selectedBlockShader = std::make_unique<Shader>("shaders/selectedBlock/shader.vert", "shaders/selectedBlock/shader.frag");
+    
+    m_chunkShader->use();
+    m_chunkShader->setInt("text", 0);
+
+    m_selectedBlockShader->use();
+    m_selectedBlockShader->setInt("text", 0);
+}
+
+void Game::initTextures() {
+    glGenTextures(1, &m_textureAtlas);
+    glBindTexture(GL_TEXTURE_2D, m_textureAtlas);
+
+    // Set texture wrapping and filtering options
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    // Load image data using stb_image
+    int width, height, nrChannels;
+    stbi_set_flip_vertically_on_load(true);
+    unsigned char *data = stbi_load("assets/img/minecraft_texture_map.png", &width, &height, &nrChannels, 0);
+
+    if (data) {
+        GLenum format;
+        if (nrChannels == 1) format = GL_RED;
+        else if (nrChannels == 3) format = GL_RGB;
+        else if (nrChannels == 4) format = GL_RGBA;
+        else {
+            std::cerr << "Unsupported image format with " << nrChannels << " channels." << std::endl;
+            stbi_image_free(data);
+            return;
+        }
+
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    } else {
+        std::cerr << "Failed to load texture" << std::endl;
+    }
+    
+    stbi_image_free(data);
+}
+
+void Game::initRenderObjects() {
+    // Chunk render objects are initialised as they are created
+
+    // This function initializes the VAO/VBO for the selected block outline
+    glGenVertexArrays(1, &m_selectedBlockVao);
+    glGenBuffers(1, &m_selectedBlockVbo);
+
+    glBindVertexArray(m_selectedBlockVao);
+
+    glBindBuffer(GL_ARRAY_BUFFER, m_selectedBlockVbo);
+    // Note: This relies on s_cubeVertices being defined.
+    glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);
+
+    // Position attribute (stride of 6 floats)
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
@@ -832,306 +1095,127 @@ void initializeSelectedBlockBuffer(){
 
     // Face ID attribute
     glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(5 * sizeof(float)));
-    glEnableVertexAttribArray(2); //blocktype is passed as a uniform variable
+    glEnableVertexAttribArray(2);
+    
+    glBindVertexArray(0);
 }
 
-void generateTerrain(glm::vec3 currentPlayerPosition){
-
-    FastNoiseLite noise;
-    noise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
-    noise.SetFractalType(FastNoiseLite::FractalType_FBm);
-    noise.SetSeed(g_NoiseSeed);
-    noise.SetFractalOctaves(g_NoiseOctaves);
-    noise.SetFractalGain(g_NoiseGain);
-    noise.SetFractalLacunarity(g_NoiseLacunarity);
-    noise.SetFrequency(g_NoiseFrequency);
-
-    std::vector<glm::ivec3> newChunks;
-
-    for (int cx = -XZ_LOAD_DIST; cx <= XZ_LOAD_DIST; cx++) {
-        for (int cy = -Y_LOAD_DIST; cy <= Y_LOAD_DIST; cy++) {
-            for (int cz = -XZ_LOAD_DIST; cz <= XZ_LOAD_DIST; cz++) {
-
-                if (cx * cx + cz * cz > XZ_RENDER_DIST * XZ_RENDER_DIST) {
-                    continue;
-                }                
-                
-                glm::ivec3 chunkOrigin = getChunkOrigin(glm::round(currentPlayerPosition)) + glm::ivec3(cx, cy, cz) * CHUNK_SIZE;   
-                if (chunks.find(chunkOrigin) != chunks.end()){
-                    continue;
-                }
-                Chunk& currentChunk = chunkMap[chunkOrigin];
-                newChunks.push_back(chunkOrigin);
-
-                for (int x = 0; x < CHUNK_SIZE; x++) {
-                    for (int z = 0; z < CHUNK_SIZE; z++) {
-                        
-                        // Calculate global coordinates for noise function
-                        float globalX = (float)(chunkOrigin.x + x);
-                        float globalZ = (float)(chunkOrigin.z + z);
-
-                        float height = noise.GetNoise(globalX, globalZ);
-                        height = (height + 1.0f) * amplitude;
-                        height = glm::round(height);
-
-                        for (int y = 0; y < CHUNK_SIZE; y++) {
-                            // global Y position
-                            int globalY = chunkOrigin.y + y;
-
-                            if (globalY > height) {
-                                continue; 
-                            } else if (globalY == (int)height) {
-                                currentChunk.blocks[x][y][z].type = 1; // Grass
-                            } else if (globalY >= height - 5) {
-                                currentChunk.blocks[x][y][z].type = 2; // Dirt
-                            } else {
-                                currentChunk.blocks[x][y][z].type = 3; // Stone
-                            }
-                        }
-                    }
-                }
-                
-            }
-        }
+void Game::onMouseMovement(double xpos, double ypos) {
+    if (glfwGetInputMode(m_window, GLFW_CURSOR) != GLFW_CURSOR_DISABLED) {
+        return; // Don't move camera if cursor is visible
     }
 
-    for (const auto chunkCoord: newChunks){
-        calculateChunk(chunkCoord);
+    if (m_input.firstMouse) {
+        m_input.lastX = static_cast<float>(xpos);
+        m_input.lastY = static_cast<float>(ypos);
+        m_input.firstMouse = false;
+    }
+
+    float xoffset = static_cast<float>(xpos) - m_input.lastX;
+    float yoffset = m_input.lastY - static_cast<float>(ypos); // reversed since y-coordinates go from top to bottom
+    m_input.lastX = static_cast<float>(xpos);
+    m_input.lastY = static_cast<float>(ypos);
+
+    xoffset *= m_camera.sensitivity;
+    yoffset *= m_camera.sensitivity;
+
+    m_camera.yaw += xoffset;
+    m_camera.pitch += yoffset;
+
+    // Clamp the pitch to avoid flipping the camera
+    if (m_camera.pitch > m_camera.maxPitch) m_camera.pitch = m_camera.maxPitch;
+    if (m_camera.pitch < -m_camera.maxPitch) m_camera.pitch = -m_camera.maxPitch;
+
+    // Recalculate the camera's front vector
+    glm::vec3 direction;
+    direction.x = cos(glm::radians(m_camera.yaw)) * cos(glm::radians(m_camera.pitch));
+    direction.y = sin(glm::radians(m_camera.pitch));
+    direction.z = sin(glm::radians(m_camera.yaw)) * cos(glm::radians(m_camera.pitch));
+    m_camera.front = glm::normalize(direction);
+}
+
+void Game::framebuffer_size_callback(GLFWwindow* window, int width, int height) {
+    glViewport(0, 0, width, height);
+}
+
+void Game::mouse_callback_router(GLFWwindow* window, double xpos, double ypos) {
+    // we reroute the function becuase glfw expects a c style functions without any attachments to any objects, but if we dont know the object, we cant get member like camera to update data
+    Game* game = static_cast<Game*>(glfwGetWindowUserPointer(window));
+    if (game) {
+        game->onMouseMovement(xpos, ypos);
     }
 }
 
+Game::Game() :
+    m_window(nullptr), m_deltaTime(0.0f), m_lastFrame(0.0f), m_chunkChange(false),
+    m_rayStart(0.1f), m_rayEnd(4.0f), m_rayStep(0.1f),
+    m_rayStarts({
+        glm::vec3(0), glm::vec3(0.05f, 0, 0), glm::vec3(-0.05f, 0, 0),
+        glm::vec3(0, 0.05f, 0), glm::vec3(0, -0.05f, 0), glm::vec3(0, 0, 0.05f),
+        glm::vec3(0, 0, -0.05f)
+        }),
+    m_collisionGap(0.01f), m_collisionMargin(0.5f),
+    m_selectedBlock(glm::ivec3(INT_MAX)),
+    m_previousBlock(glm::ivec3(INT_MAX))
+    {}
 
+void Game::init() {
+    initGlfw();
+    initGlad();
+    initImGui();
+    initShaders();
+    initTextures();
+    initRenderObjects();
 
-int main(){
-    // Initialize GLFW
-    glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    // Configure the noise generator
+    m_world.noise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
+    m_world.noise.SetFractalType(FastNoiseLite::FractalType_FBm);
+    m_world.noise.SetSeed(m_world.g_NoiseSeed);
+    m_world.noise.SetFractalOctaves(m_world.g_NoiseOctaves);
+    m_world.noise.SetFractalGain(m_world.g_NoiseGain);
+    m_world.noise.SetFractalLacunarity(m_world.g_NoiseLacunarity);
+    m_world.noise.SetFrequency(m_world.g_NoiseFrequency);
 
-    #ifdef __APPLE__
-        glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-    #endif
+    // Generate the initial terrain around the player
+    generateTerrain();
+}
 
-    // Create a window
-    GLFWwindow* window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "OpenGL Triangle", NULL, NULL);
-    if(window == NULL){
-        std::cout << "Failed to create GLFW window" << std::endl;
-        glfwTerminate();
-        return -1;
-    }
-    glfwMakeContextCurrent(window);
-
-    // Initialize GLAD
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)){
-        std::cout << "Failed to initialize GLAD" << std::endl;
-        return -1;
-    }  
-
-    // set framebuffer size callback function
-    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-    
-    // set mouse callback function
-    glfwSetCursorPosCallback(window, mouse_callback);
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-
-    // Initialize ImGui
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-    ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init("#version 330 core"); 
-
-    Shader chunkShader("shaders/world/shader.vert", "shaders/world/shader.frag");         
-    
-    // Create and compile shaders
-    generateTerrain(playerPosition);
-
-    //Chunk Shader
-    // for (auto const& [chunkCoord, chunk] : chunkMap) {
-    //     calculateChunk(chunkCoord);
-    // }   
-        
-    // Selected Block shader
-    Shader selectedBlockShader("shaders/selectedBlock/shader.vert", "shaders/selectedBlock/shader.frag");        
-    initializeSelectedBlockBuffer();
-
-    
-    // Set drawing mode
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    glEnable(GL_BLEND);
+void Game::run() {
+    // Enable OpenGL features
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-
-    //Load the texture
-    unsigned int textureAtlas;
-
-    glGenTextures(1, &textureAtlas);
-    glBindTexture(GL_TEXTURE_2D, textureAtlas);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); // x axis	set texture wrapping to GL_REPEAT (default wrapping method)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT); // y axis
-     
-    // set texture filtering parameters
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-    // load image, create texture and generate mipmaps
-    int widthImg, heightImg, nrChannels;
-    stbi_set_flip_vertically_on_load(true);
-    unsigned char *data1 = stbi_load("assets/img/minecraft_texture_map.png", &widthImg, &heightImg, &nrChannels, 0);
-
-    GLenum format;
-    if (nrChannels == 1)
-        format = GL_RED;
-    else if (nrChannels == 3)
-        format = GL_RGB;
-    else if (nrChannels == 4)
-        format = GL_RGBA;
     
-    if (data1) {
-        std::cout<<"yes texture"<<std::endl;
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glTexImage2D(GL_TEXTURE_2D, 0, format, widthImg, heightImg, 0, format, GL_UNSIGNED_BYTE, data1);
-        glGenerateMipmap(GL_TEXTURE_2D);
+    // The main game loop
+    while (!glfwWindowShouldClose(m_window)) {
+
+        float currentFrame = static_cast<float>(glfwGetTime());
+        m_deltaTime = currentFrame - m_lastFrame;
+        m_lastFrame = currentFrame;
+
+
+        processInput();
+        update();
+        render();
+
+        glfwSwapBuffers(m_window);
+        glfwPollEvents();
     }
-    else{
-        std::cout<<"no texture";
-    }
+}
+
+void Game::cleanup() {
+    // Delete all OpenGL objects
+    for (auto& pair : m_world.chunkVboMap) glDeleteBuffers(1, &pair.second);
+    for (auto& pair : m_world.chunkVaoMap) glDeleteVertexArrays(1, &pair.second);
+    glDeleteTextures(1, &m_textureAtlas);
+    glDeleteVertexArrays(1, &m_selectedBlockVao);
+    glDeleteBuffers(1, &m_selectedBlockVbo);
     
-    stbi_image_free(data1);
-
-
-    // Bind texture to the shaders
-    chunkShader.use();
-    chunkShader.setInt("text", 0);
-
-    selectedBlockShader.use();
-    selectedBlockShader.setInt("text", 0);
-    
-
-    // Main render loop
-    while(!glfwWindowShouldClose(window))
-    {
-        float currentFrame = glfwGetTime();
-        deltaTime = currentFrame - lastFrame;
-        lastFrame = currentFrame;
-        
-        // Input processing
-        processInput(window);
-
-        // plater state update
-        if(!CreativeMode){
-            if(!onGround) {
-                velocity -= gravity * deltaTime;
-                if (velocity < -50.0f) { // Clip the lower value of velocity
-                    velocity = -50.0f;
-                }
-            }
-            glm::vec3 y_movement = glm::vec3(0.0f, velocity * deltaTime, 0.0f); // vertical movement
-            glm::vec3 nextPlayerPosition = playerPosition + y_movement;
-            if (!CreativeMode){
-                auto nextpos = resolveYCollision(nextPlayerPosition, y_movement);
-                if (getChunkOrigin(nextpos)!=getChunkOrigin(playerPosition)){
-                    chunkChange = true;
-                }
-                playerPosition = nextpos;      
-            }
-            else{
-                playerPosition = nextPlayerPosition;
-            }
-        }
-
-        if (chunkChange){
-            generateTerrain(playerPosition);
-            chunkChange = false;
-        }
-
-        // Update camera position
-        cameraPos = playerPosition + glm::vec3(0.0f, eyeHeight, 0.0f);
-        
-        rayCast(cameraFront);
-
-        // Clear the screen
-        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        // Use shader
-        chunkShader.use();
-
-        // Update viewport size
-        int curWidth, curHeight;
-        glfwGetFramebufferSize(window, &curWidth, &curHeight);        
-
-        // Set uniforms
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, textureAtlas);   
-        
-        glm::mat4 model = glm::mat4(1.0f);
-        chunkShader.setMat4("model", model);        
-    
-        glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp); // in vectors, dir = target - pos | target = pos + dir
-        chunkShader.setMat4("view", view);
-
-        glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)curWidth/(float)curHeight, 0.1f, 5000.0f);
-        chunkShader.setMat4("projection", projection);
-
-
-        for (int cx = -XZ_RENDER_DIST; cx <= XZ_RENDER_DIST; cx++) {
-            for (int cy = -Y_RENDER_DIST; cy <= Y_RENDER_DIST; cy++) {
-                for (int cz = -XZ_RENDER_DIST; cz <= XZ_RENDER_DIST; cz++) {
-
-                    if (cx * cx + cz * cz > XZ_RENDER_DIST * XZ_RENDER_DIST) {
-                        continue;
-                    }                    
-                    
-                    glm::ivec3 chunkOrigin = getChunkOrigin(glm::round(playerPosition)) + glm::ivec3(cx, cy, cz) * CHUNK_SIZE;   
-                    if (chunks.find(chunkOrigin) != chunks.end()){
-                        glBindVertexArray(chunkVAOMap[chunkOrigin]);
-                        glDrawArrays(GL_TRIANGLES, 0, chunks[chunkOrigin].size() / 7);
-                    }
-                }
-            }
-        }
-        
-        
-        // highlight the selected block with seperate shader
-        if (selectedBlock != glm::ivec3(INT_MAX) && !CreativeMode){
-            selectedBlockShader.use();
-            glm::ivec3 chunkCoord = getChunkOrigin(selectedBlock);
-            glm::ivec3 localPos = getBlockLocalPosition(selectedBlock, chunkCoord);            
-            selectedBlockShader.setInt("blockType", chunkMap[chunkCoord].blocks[localPos.x][localPos.y][localPos.z].type);
-
-            glm::mat4 model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3(selectedBlock));
-            model = glm::scale(model, glm::vec3(1.001));
-
-            selectedBlockShader.setMat4("model", model);        
-            selectedBlockShader.setMat4("view", view);
-            selectedBlockShader.setMat4("projection", projection);
-            
-            glBindVertexArray(selectedBlockVAO);
-            glDrawArrays(GL_TRIANGLES, 0, sizeof(cubeVertices)/sizeof(float));
-        }
-        
-        // Render ImGui
-        renderImGui(); 
-
-        // Swap buffers and poll events
-        glfwSwapBuffers(window);
-        glfwPollEvents();    
-    }
-    
-    // Cleanup
-    for (auto& [_, vbo] : chunkVBOMap) glDeleteBuffers(1, &vbo);
-    for (auto& [_, vao] : chunkVAOMap) glDeleteVertexArrays(1, &vao);
-    glDeleteTextures(1, &textureAtlas);
+    // Shutdown ImGui and GLFW
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();    
+    ImGui::DestroyContext();
     
     glfwTerminate();
-
-    return 0;
 }
+
