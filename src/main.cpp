@@ -26,21 +26,21 @@ const float jumpVelocity = 9.0f;
 const float cameraSpeed = 10.0f;
 const float mouseSensitivity = 0.1f;
 
-// Player dimensions
-const float playerWidth = 0.6f;
-const float playerDepth = 0.6f;
-const float playerHeight = 1.8f;
-const float eyeHeight = 1.6f;
-
 // Collision constants
 const float gap = 0.01f; // Gap to avoid collision issues
 const float margin = 0.5f; // a margin to increase the number of blocks that are checked for collision
 
+
+
 // Player state
+const float playerWidth = 0.6f;
+const float playerDepth = 0.6f;
+const float playerHeight = 1.8f;
+const float eyeHeight = 1.6f;
 float velocity = 0.0f;
-glm::vec3 playerPosition = glm::vec3(0.0f);
+glm::vec3 playerPosition = glm::vec3(0.0f, 10.0f, 0.0f);
 bool onGround = false;
-bool CreativeMode = false; 
+bool CreativeMode = true; 
 
 // Camera state
 float yaw = -90.0f;
@@ -126,8 +126,12 @@ namespace std {
 }
 
 const int CHUNK_SIZE = 8;
-int RENDER_DIST = 2; // This gives you 3x3x3 chunks centered at 0
+int Y_LOAD_DIST = 5;
+int XZ_LOAD_DIST = 6;
+int Y_RENDER_DIST = 5; 
+int XZ_RENDER_DIST = 5; 
 bool chunkChange = false;
+
 
 struct BlockInfo{
     int type;
@@ -842,17 +846,22 @@ void generateTerrain(glm::vec3 currentPlayerPosition){
     noise.SetFractalLacunarity(g_NoiseLacunarity);
     noise.SetFrequency(g_NoiseFrequency);
 
+    std::vector<glm::ivec3> newChunks;
 
+    for (int cx = -XZ_LOAD_DIST; cx <= XZ_LOAD_DIST; cx++) {
+        for (int cy = -Y_LOAD_DIST; cy <= Y_LOAD_DIST; cy++) {
+            for (int cz = -XZ_LOAD_DIST; cz <= XZ_LOAD_DIST; cz++) {
 
-    for (int cx = -RENDER_DIST; cx <= RENDER_DIST; cx++) {
-        for (int cy = -RENDER_DIST; cy <= RENDER_DIST; cy++) {
-            for (int cz = -RENDER_DIST; cz <= RENDER_DIST; cz++) {
+                if (cx * cx + cz * cz > XZ_RENDER_DIST * XZ_RENDER_DIST) {
+                    continue;
+                }                
                 
                 glm::ivec3 chunkOrigin = getChunkOrigin(glm::round(currentPlayerPosition)) + glm::ivec3(cx, cy, cz) * CHUNK_SIZE;   
                 if (chunks.find(chunkOrigin) != chunks.end()){
                     continue;
                 }
                 Chunk& currentChunk = chunkMap[chunkOrigin];
+                newChunks.push_back(chunkOrigin);
 
                 for (int x = 0; x < CHUNK_SIZE; x++) {
                     for (int z = 0; z < CHUNK_SIZE; z++) {
@@ -881,28 +890,16 @@ void generateTerrain(glm::vec3 currentPlayerPosition){
                         }
                     }
                 }
-
-                calculateChunk(chunkOrigin);
                 
             }
         }
     }
 
-    // int radius = TERRAIN_SIZE / 2;
-    // glm::ivec3 center = glm::ivec3(0, 0, 0); // or playerPos or wherever
-    
-    // for (int x = -radius; x <= radius; ++x) {
-    //     for (int z = -radius; z <= radius; ++z) {
-    //         if (x*x + z*z <= radius*radius) { // x^2 + z^2 <= r^2 for a circle
-    //             float height = noise.GetNoise((float)x, (float)z); 
-    //             height = glm::round(height);
-    //             glm::vec3 blockPosition = glm::vec3((float)z, height, (float)x);               
-    //             glm::ivec3 key = center + glm::ivec3(blockPosition); // Center the terrain around the origin
-    //             blockMap[key] = true; // dont forget to change to chunkMap
-    //         }
-    //     }
-    // }
+    for (const auto chunkCoord: newChunks){
+        calculateChunk(chunkCoord);
+    }
 }
+
 
 
 int main(){
@@ -1012,6 +1009,7 @@ int main(){
 
     selectedBlockShader.use();
     selectedBlockShader.setInt("text", 0);
+    
 
     // Main render loop
     while(!glfwWindowShouldClose(window))
@@ -1080,9 +1078,13 @@ int main(){
         chunkShader.setMat4("projection", projection);
 
 
-        for (int cx = -RENDER_DIST; cx <= RENDER_DIST; cx++) {
-            for (int cy = -RENDER_DIST; cy <= RENDER_DIST; cy++) {
-                for (int cz = -RENDER_DIST; cz <= RENDER_DIST; cz++) {
+        for (int cx = -XZ_RENDER_DIST; cx <= XZ_RENDER_DIST; cx++) {
+            for (int cy = -Y_RENDER_DIST; cy <= Y_RENDER_DIST; cy++) {
+                for (int cz = -XZ_RENDER_DIST; cz <= XZ_RENDER_DIST; cz++) {
+
+                    if (cx * cx + cz * cz > XZ_RENDER_DIST * XZ_RENDER_DIST) {
+                        continue;
+                    }                    
                     
                     glm::ivec3 chunkOrigin = getChunkOrigin(glm::round(playerPosition)) + glm::ivec3(cx, cy, cz) * CHUNK_SIZE;   
                     if (chunks.find(chunkOrigin) != chunks.end()){
