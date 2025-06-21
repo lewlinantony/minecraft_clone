@@ -28,8 +28,16 @@ const int CHUNK_SIZE = 8;
 struct BoundingBox {
     glm::vec3 max;
     glm::vec3 min;
+
+    static BoundingBox box(glm::vec3 position, float width, float height, float depth) {
+        BoundingBox b;
+        glm::vec3 halfSize = glm::vec3(width / 2.0f, height / 2.0f, depth / 2.0f);
+        b.min = position - halfSize;
+        b.max = position + halfSize;
+        return b;
+    }
 };
-BoundingBox nextPlayerBox;
+
 
 // Hash function for glm::ivec3
 namespace std {
@@ -639,15 +647,12 @@ void Game::performRaycasting() {
                     bestHit = blockPosition;
 
                     // Check if the previous block is valid for placement
-                    BoundingBox prevBlockBox;
-                    prevBlockBox.min = glm::vec3(prevBlockThisRay) - glm::vec3(0.5f);
-                    prevBlockBox.max = glm::vec3(prevBlockThisRay) + glm::vec3(0.5f);                        
+                    BoundingBox prevBlockBox = BoundingBox::box(prevBlockThisRay, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);                      
 
-                    BoundingBox playerBox;
-                    playerBox.min = m_player.position + glm::vec3(-m_player.width / 2.0f, 0.0f, -m_player.depth / 2.0f);
-                    playerBox.max = m_player.position + glm::vec3(m_player.width / 2.0f, m_player.height, m_player.depth / 2.0f);                        
-                    
-                    //cannot be previous block(block to be placed) if block overlaps with players bounding box
+                    // here pass the position as playerposition.y - height/2 cause the y of the player is at the bottom of the player not the center
+                    BoundingBox playerBox = BoundingBox::box(m_player.position - glm::vec3(0.0f, -m_player.height/2, 0.0f), m_player.width, m_player.height, m_player.depth);
+
+                    // cannot be previous block(block to be placed) if block overlaps with players bounding box
                     if (!boxBoxOverlap(playerBox, prevBlockBox)) {
                         bestPrev = prevBlockThisRay;
                     } else {
@@ -862,10 +867,13 @@ bool Game::boxBoxOverlap(const BoundingBox& box1, const BoundingBox& box2) const
 }
 
 glm::vec3 Game::resolveYCollision(glm::vec3 nextPlayerPos, glm::vec3 yMovement) {
-    BoundingBox playerBox;
-    playerBox.max = glm::vec3(nextPlayerPos.x + m_player.width / 2, nextPlayerPos.y + m_player.height, nextPlayerPos.z + m_player.depth / 2);
-    playerBox.min = glm::vec3(nextPlayerPos.x - m_player.width / 2, nextPlayerPos.y, nextPlayerPos.z - m_player.depth / 2);
-
+    BoundingBox playerBox = BoundingBox::box(
+        nextPlayerPos + glm::vec3(0.0f, m_player.height / 2.0f, 0.0f),
+        m_player.width,
+        m_player.height,
+        m_player.depth
+    );
+    
     int max_x = static_cast<int>(glm::ceil(playerBox.max.x + m_collisionMargin));
     int max_y = static_cast<int>(glm::ceil(playerBox.max.y + m_collisionMargin));
     int max_z = static_cast<int>(glm::ceil(playerBox.max.z + m_collisionMargin));
@@ -880,9 +888,12 @@ glm::vec3 Game::resolveYCollision(glm::vec3 nextPlayerPos, glm::vec3 yMovement) 
             for (int z = min_z; z < max_z; z++) {
                 Block* block = m_world.getBlock(glm::ivec3(x, y, z));
                 if (block && block->type != 0) {
-                    BoundingBox blockBox;
-                    blockBox.max = glm::vec3(x + 0.5f, y + 0.5f + m_collisionGap, z + 0.5f);
-                    blockBox.min = glm::vec3(x - 0.5f, y - 0.5f - m_collisionGap, z - 0.5f);
+                    BoundingBox blockBox = BoundingBox::box(
+                        glm::vec3(x, y, z),
+                        BLOCK_SIZE,
+                        BLOCK_SIZE + 2.0f * m_collisionGap,
+                        BLOCK_SIZE
+                    );
 
                     if (boxBoxOverlap(playerBox, blockBox)) {
                         m_player.velocityY = 0.0f;
@@ -906,9 +917,12 @@ glm::vec3 Game::resolveXZCollision(glm::vec3 nextPlayerPos, glm::vec3 xzMovement
 
     // Resolve X-axis collision
     if (xzMovement.x != 0) {
-        BoundingBox playerBoxX;
-        playerBoxX.max = glm::vec3(resolvedPos.x + m_player.width / 2, m_player.position.y + m_player.height, m_player.position.z + m_player.depth / 2);
-        playerBoxX.min = glm::vec3(resolvedPos.x - m_player.width / 2, m_player.position.y, m_player.position.z - m_player.depth / 2);
+        BoundingBox playerBoxX = BoundingBox::box(
+            glm::vec3(resolvedPos.x, m_player.position.y + m_player.height / 2.0f, m_player.position.z),
+            m_player.width,
+            m_player.height,
+            m_player.depth
+        );
 
         int max_x = static_cast<int>(glm::ceil(playerBoxX.max.x + m_collisionMargin));
         int max_y = static_cast<int>(glm::ceil(playerBoxX.max.y + m_collisionMargin));
@@ -921,9 +935,12 @@ glm::vec3 Game::resolveXZCollision(glm::vec3 nextPlayerPos, glm::vec3 xzMovement
             for (int y = min_y; y < max_y; y++) {
                 for (int z = min_z; z < max_z; z++) {
                     if (m_world.getBlock({x, y, z}) && m_world.getBlock({x, y, z})->type != 0) {
-                        BoundingBox blockBox;
-                        blockBox.max = glm::vec3(x + 0.5f + m_collisionGap, y + 0.5f, z + 0.5f);
-                        blockBox.min = glm::vec3(x - 0.5f - m_collisionGap, y - 0.5f, z - 0.5f);
+                        BoundingBox blockBox = BoundingBox::box(
+                            glm::vec3(x, y, z),
+                            BLOCK_SIZE + 2.0f * m_collisionGap,
+                            BLOCK_SIZE,
+                            BLOCK_SIZE
+                        );
                         if (boxBoxOverlap(playerBoxX, blockBox)) {
                             if (xzMovement.x > 0) { // Moving right
                                 resolvedPos.x = blockBox.min.x - m_player.width / 2;
@@ -941,9 +958,12 @@ glm::vec3 Game::resolveXZCollision(glm::vec3 nextPlayerPos, glm::vec3 xzMovement
 resolve_z:
     // Resolve Z-axis collision
     if (xzMovement.z != 0) {
-        BoundingBox playerBoxZ;
-        playerBoxZ.max = glm::vec3(resolvedPos.x + m_player.width / 2, m_player.position.y + m_player.height, resolvedPos.z + m_player.depth / 2);
-        playerBoxZ.min = glm::vec3(resolvedPos.x - m_player.width / 2, m_player.position.y, resolvedPos.z - m_player.depth / 2);
+        BoundingBox playerBoxZ = BoundingBox::box(
+            glm::vec3(resolvedPos.x, m_player.position.y + m_player.height / 2.0f, resolvedPos.z),
+            m_player.width,
+            m_player.height,
+            m_player.depth
+        );
 
         int max_x = static_cast<int>(glm::ceil(playerBoxZ.max.x + m_collisionMargin));
         int max_y = static_cast<int>(glm::ceil(playerBoxZ.max.y + m_collisionMargin));
@@ -956,9 +976,12 @@ resolve_z:
             for (int y = min_y; y < max_y; y++) {
                 for (int z = min_z; z < max_z; z++) {
                     if (m_world.getBlock({x, y, z}) && m_world.getBlock({x, y, z})->type != 0) {
-                        BoundingBox blockBox;
-                        blockBox.max = glm::vec3(x + 0.5f, y + 0.5f, z + 0.5f + m_collisionGap);
-                        blockBox.min = glm::vec3(x - 0.5f, y - 0.5f, z - 0.5f - m_collisionGap);
+                        BoundingBox blockBox = BoundingBox::box(
+                            glm::vec3(x, y, z),
+                            BLOCK_SIZE,
+                            BLOCK_SIZE,
+                            BLOCK_SIZE + 2.0f * m_collisionGap
+                        );
                         if (boxBoxOverlap(playerBoxZ, blockBox)) {
                             if (xzMovement.z > 0) { // Moving forward
                                 resolvedPos.z = blockBox.min.z - m_player.depth / 2;
