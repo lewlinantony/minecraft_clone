@@ -253,10 +253,10 @@ struct World {
     std::unordered_map<glm::ivec3, GLuint> chunkVaoMap;
 
     // Configuration
-    int Y_LOAD_DIST = 5;
-    int XZ_LOAD_DIST = 6;
-    int Y_RENDER_DIST = 5;
-    int XZ_RENDER_DIST = 5;
+    int Y_RENDER_DIST = 3;
+    int XZ_RENDER_DIST = 10;
+    int Y_LOAD_DIST = Y_RENDER_DIST+1;
+    int XZ_LOAD_DIST = XZ_RENDER_DIST+1;
 
     // Noise Parameters
     FastNoiseLite noise;
@@ -343,6 +343,7 @@ private:
     // Raycasting State (as per your request)
     glm::ivec3 m_selectedBlock;
     glm::ivec3 m_previousBlock;
+    int curBlockType;
 
     // Raycasting Configuration
     const float m_rayStart = 0.1f;
@@ -490,7 +491,7 @@ void Game::processInput() {
     // Block Placement
     bool mouseRightIsPressed = glfwGetMouseButton(m_window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
     if (mouseRightIsPressed && !m_input.mouseRightWasPressed && m_previousBlock != glm::ivec3(INT_MAX)) {
-        m_world.setBlock(m_previousBlock, 1); 
+        m_world.setBlock(m_previousBlock, curBlockType); 
         calculateChunkAndNeighbors(m_previousBlock);
     }
     m_input.mouseRightWasPressed = mouseRightIsPressed;
@@ -704,8 +705,7 @@ void Game::generateTerrain() {
                     for (int z = 0; z < CHUNK_SIZE; z++) {
                         float globalX = (float)(chunkOrigin.x + x);
                         float globalZ = (float)(chunkOrigin.z + z);
-                        float height = m_world.noise.GetNoise(globalX, globalZ);
-                        height = (height + 1.0f) * m_world.amplitude; // Scale noise to 0-2*amp
+                        float height = m_world.noise.GetNoise(globalX, globalZ) * m_world.amplitude; // Scale noise to 0-2*amp
                         height = glm::round(height);
 
                         for (int y = 0; y < CHUNK_SIZE; y++) {
@@ -716,7 +716,7 @@ void Game::generateTerrain() {
                                 currentChunk.blocks[x][y][z].type = 1; // Grass
                             } else if (globalY >= height - 5) {
                                 currentChunk.blocks[x][y][z].type = 2; // Dirt
-                            } else {
+                            } else if (globalY >= -40) {
                                 currentChunk.blocks[x][y][z].type = 3; // Stone
                             }
                         }
@@ -747,6 +747,10 @@ std::vector<int> Game::getVisibleFaces(glm::ivec3 block) {
     for (int i = 0; i < 6; ++i) {
         glm::ivec3 neighborPos = block + directions[i];
         Block* neighborBlock = m_world.getBlock(neighborPos);
+
+        if (i==5 && neighborPos.y < m_player.position.y){
+            continue;
+        }
 
         if (neighborBlock == nullptr || neighborBlock->type == 0) {// If chunk doesn't exist or block is air
             visibleFaces.push_back(i);
@@ -1072,7 +1076,7 @@ void Game::initTextures() {
     // Load image data using stb_image
     int width, height, nrChannels;
     stbi_set_flip_vertically_on_load(true);
-    unsigned char *data = stbi_load("assets/img/minecraft_texture_map.png", &width, &height, &nrChannels, 0);
+    unsigned char *data = stbi_load("assets/img/64x_minecraft_text.png", &width, &height, &nrChannels, 0);
 
     if (data) {
         GLenum format;
@@ -1179,7 +1183,8 @@ Game::Game() :
         }),
     m_collisionGap(0.01f), m_collisionMargin(0.5f),
     m_selectedBlock(glm::ivec3(INT_MAX)),
-    m_previousBlock(glm::ivec3(INT_MAX))
+    m_previousBlock(glm::ivec3(INT_MAX)),
+    curBlockType(1)
     {}
 
 void Game::init() {
@@ -1199,6 +1204,9 @@ void Game::init() {
     m_world.noise.SetFractalLacunarity(m_world.g_NoiseLacunarity);
     m_world.noise.SetFrequency(m_world.g_NoiseFrequency);
 
+
+    m_player.position = glm::vec3(0.0f, (m_world.noise.GetNoise(0.0f, 0.0f) + 1. * m_world.amplitude) + 3.0f, 0.0f);
+
     // Generate the initial terrain around the player
     generateTerrain();
 }
@@ -1216,6 +1224,9 @@ void Game::run() {
         m_deltaTime = currentFrame - m_lastFrame;
         m_lastFrame = currentFrame;
 
+        if (m_deltaTime > 0.02f) { 
+            m_deltaTime = 0.02f;
+        }
 
         processInput();
         update();

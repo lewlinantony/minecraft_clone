@@ -13,7 +13,7 @@ uniform vec3 selectedBlock;
 void main()
 {
     float atlasSize = 512.0;
-    float texSize = 32.0f;
+    float texSize = 64.0f;
     float texPerRow = atlasSize/texSize;
 
     vec2 atlasPos;
