@@ -2,69 +2,82 @@
 
 out vec4 FragColor;
 
+// Attributes from Vertex Shader
 in vec2 TexCoord;
 in float FaceID;
 in float blockType;
-in vec3 Pos;
+in vec3 FragPos; // World space position
+in vec3 Normal;  // World space normal
 
+// Texture and Material
 uniform sampler2D text;
-uniform vec3 selectedBlock;
+
+// Lighting Uniforms
+uniform vec3 lightPos;
+uniform vec3 viewPos;
+uniform vec3 lightColor;
 
 void main()
 {
+    // 1. Texture mapping
     float atlasSize = 512.0;
     float texSize = 64.0f;
-    float texPerRow = atlasSize/texSize;
+    float texPerRow = atlasSize / texSize;
 
     vec2 atlasPos;
-    if (blockType == 1) { // Grass
-        if (int(FaceID) == 0) { // Top
-            atlasPos = vec2(0.0, 0.0);
-        }
-        else if (int(FaceID) == 1 || int(FaceID) == 2 || int(FaceID) == 3 || int(FaceID) == 4) {  // Sides
-            atlasPos = vec2(1.0, 0.0);
-        }
-        else{ // Bottom
-            atlasPos = vec2(2.0, 0.0);
-        }
+    if (blockType == 1.0) { // Grass
+        if (FaceID == 0.0) atlasPos = vec2(0.0, 0.0);      // Top
+        else if (FaceID >= 1.0 && FaceID <= 4.0) atlasPos = vec2(1.0, 0.0); // Sides
+        else atlasPos = vec2(2.0, 0.0);                    // Bottom
+    } else if (blockType == 2.0) { // Dirt
+        atlasPos = vec2(2.0, 0.0);
+    } else if (blockType == 3.0) { // Stone
+        atlasPos = vec2(3.0, 0.0);
     }
-    else if (blockType == 2){ //Dirt
-        atlasPos = vec2(2.0f, 0.0f);
-    }
-    else if (blockType == 3){ //Stone
-        atlasPos = vec2(3.0f, 0.0f);
-    }    
 
-    // we are working with normalised values here    
     vec2 uvMin = atlasPos / texPerRow;
     vec2 uvMax = (atlasPos + vec2(1.0, 1.0)) / texPerRow;
-    vec2 uv = mix(uvMin, uvMax, TexCoord);    
-
+    vec2 uv = mix(uvMin, uvMax, TexCoord);
     vec4 texColor = texture(text, uv);
 
-    float borderWidth = 0.003; // Controls how wide the border is (0.01-0.05 works well)
-    float borderDarkness = 0.3f;    
+    // --- YOUR BORDER CODE ---
+    float borderWidth = 0.003; 
+    float borderDarkness = 0.3f;   
 
-    // Calculate distance from texture edge
-    float distFromEdgeX = min(TexCoord.x, 1.0 - TexCoord.x); //Calculate distance from border
+    float distFromEdgeX = min(TexCoord.x, 1.0 - TexCoord.x);
     float distFromEdgeY = min(TexCoord.y, 1.0 - TexCoord.y);
     float distFromEdge = min(distFromEdgeX, distFromEdgeY);
     
-    // Create a darkening factor that increases near edges
     float borderFactor = 1.0;
-    if (distFromEdge < borderWidth) { // if inside the set border width
-        // Smoothly transition from border darkness to normal color
-        borderFactor = mix(borderDarkness, 1.0, distFromEdge/borderWidth); // linearly interpolate it with distFromEdge/borderWidth as the scale that determines how darked it is
-    }        
-
-    // Apply the border darkening
+    if (distFromEdge < borderWidth) {
+        borderFactor = mix(borderDarkness, 1.0, distFromEdge / borderWidth);
+    }       
+    
+    // Apply the border darkening FIRST
     texColor.rgb *= borderFactor;
 
-    float brightness = 1.0f;
+    // --- PHONG LIGHTING CALCULATION ---
+    // Ambient
+    float ambientStrength = 0.3;
+    vec3 ambient = ambientStrength * lightColor;
 
-    //Apply the brightness
-    texColor.rgb *= brightness;
+    // Diffuse
+    vec3 norm = normalize(Normal);
+    vec3 lightDir = normalize(lightPos - FragPos);
+    float diff = max(dot(norm, lightDir), 0.0);
+    vec3 diffuse = diff * lightColor;
 
-    FragColor = texColor;
+    // Specular
+    float specularStrength = 0.2; 
+    vec3 viewDir = normalize(viewPos - FragPos);
+    vec3 halfwayDir = normalize(lightDir + viewDir);
+    float spec = pow(max(dot(norm, halfwayDir), 0.0), 32.0); // 32 is shininess
+    vec3 specular = specularStrength * spec * lightColor;
+    
+    // --- COMBINE RESULTS ---
+    // Apply lighting to the (already border-darkened) texture color
+    vec3 lighting = (ambient + diffuse + specular);
+    vec3 result = lighting * texColor.rgb;
+
+    FragColor = vec4(result, texColor.a);
 }
-

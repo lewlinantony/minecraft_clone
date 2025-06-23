@@ -495,6 +495,16 @@ void Game::processInput() {
         calculateChunkAndNeighbors(m_previousBlock);
     }
     m_input.mouseRightWasPressed = mouseRightIsPressed;
+
+    if (glfwGetKey(m_window, GLFW_KEY_1) == GLFW_PRESS) {
+        curBlockType = 1;
+    }
+    if (glfwGetKey(m_window, GLFW_KEY_2) == GLFW_PRESS) {
+        curBlockType = 2;
+    }
+    if (glfwGetKey(m_window, GLFW_KEY_3) == GLFW_PRESS) {
+        curBlockType = 3;
+    }    
 }
 
 void Game::update() {
@@ -528,6 +538,11 @@ void Game::render() {
     m_chunkShader->setMat4("view", view);
     m_chunkShader->setMat4("projection", projection);
     m_chunkShader->setMat4("model", glm::mat4(1.0f));
+
+    // Set lighting uniforms
+    m_chunkShader->setVec3("lightPos", glm::vec3(m_player.position.x, m_player.position.y + 100, m_player.position.z)); // Light high above player
+    m_chunkShader->setVec3("viewPos", m_camera.position);
+    m_chunkShader->setVec3("lightColor", glm::vec3(1.0f, 1.0f, 1.0f));    
 
     // Bind texture atlas
     glActiveTexture(GL_TEXTURE0);
@@ -748,7 +763,7 @@ std::vector<int> Game::getVisibleFaces(glm::ivec3 block) {
         glm::ivec3 neighborPos = block + directions[i];
         Block* neighborBlock = m_world.getBlock(neighborPos);
 
-        if (i==5 && neighborPos.y < m_player.position.y){
+        if ((i == 5 && neighborPos.y < m_player.position.y)) {     // Bottom
             continue;
         }
 
@@ -769,6 +784,15 @@ void Game::calculateChunk(glm::ivec3 chunkCoord) {
     }
     Chunk& chunk = m_world.chunkMap.at(chunkCoord);
 
+    const glm::vec3 normals[6] = {
+        glm::vec3(0.0f, 1.0f, 0.0f),    // Top (+Y)
+        glm::vec3(0.0f, 0.0f, -1.0f),   // Front (-Z)
+        glm::vec3(-1.0f, 0.0f, 0.0f),   // Right (-X)
+        glm::vec3(0.0f, 0.0f, 1.0f),    // Back (+Z)
+        glm::vec3(1.0f, 0.0f, 0.0f),    // Left (+X)
+        glm::vec3(0.0f, -1.0f, 0.0f)    // Bottom (-Y)
+    };    
+
     for (int x = 0; x < CHUNK_SIZE; x++) {
         for (int y = 0; y < CHUNK_SIZE; y++) {
             for (int z = 0; z < CHUNK_SIZE; z++) {
@@ -779,6 +803,8 @@ void Game::calculateChunk(glm::ivec3 chunkCoord) {
                 for (int faceID : getVisibleFaces(blockPosition)) {
                     const float* curFace = faceVertices[faceID];
                     if (!curFace) continue;
+
+                    const glm::vec3 normal = normals[faceID];
 
                     for (int i = 0; i < 6; ++i) { // 6 vertices per face
                         int idx = i * 6; // 6 attributes per vertex in face data
@@ -796,7 +822,13 @@ void Game::calculateChunk(glm::ivec3 chunkCoord) {
                         float fid = curFace[idx + 5];
                         float blockType = static_cast<float>(chunk.blocks[x][y][z].type);
 
-                        m_world.chunkMeshData[chunkCoord].insert(m_world.chunkMeshData[chunkCoord].end(), {vx, vy, vz, ux, uy, fid, blockType});
+                        m_world.chunkMeshData[chunkCoord].insert(m_world.chunkMeshData[chunkCoord].end(), {
+                            vx, vy, vz,           // Position
+                            ux, uy,               // UV Coords
+                            fid,                  // Face ID
+                            blockType,            // Block Type
+                            normal.x, normal.y, normal.z // Normal
+                        });
                     }
                 }
             }
@@ -807,8 +839,6 @@ void Game::calculateChunk(glm::ivec3 chunkCoord) {
 
     // Check if the chunk already has a VAO/VBO.
     if (m_world.chunkVaoMap.find(chunkCoord) == m_world.chunkVaoMap.end()) {
-        // If not, this is a new chunk that just gained its first visible face.
-        // Create and configure a new VAO and VBO for it.
         glGenVertexArrays(1, &chunkVAO);
         glGenBuffers(1, &chunkVBO);
         m_world.chunkVaoMap[chunkCoord] = chunkVAO;
@@ -817,14 +847,18 @@ void Game::calculateChunk(glm::ivec3 chunkCoord) {
         glBindVertexArray(chunkVAO);
         glBindBuffer(GL_ARRAY_BUFFER, chunkVBO);
 
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)0);
+        // Update vertex attribute pointers for the new 10-float stride
+        int stride = 10 * sizeof(float);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
         glEnableVertexAttribArray(0); // Position
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)(3 * sizeof(float)));
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
         glEnableVertexAttribArray(1); // UV Coords
-        glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)(5 * sizeof(float)));
+        glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, stride, (void*)(5 * sizeof(float)));
         glEnableVertexAttribArray(2); // Face ID
-        glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)(6 * sizeof(float)));
+        glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, stride, (void*)(6 * sizeof(float)));
         glEnableVertexAttribArray(3); // Block Type
+        glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, stride, (void*)(7 * sizeof(float)));
+        glEnableVertexAttribArray(4); // Normal
     } else {
         // The chunk already exists, so just get its VBO handle for updating.
         chunkVBO = m_world.chunkVboMap.at(chunkCoord);
