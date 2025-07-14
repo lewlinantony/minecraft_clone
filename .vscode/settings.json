@@ -53,7 +53,8 @@
       "variant": "cpp",
       "vector": "cpp",
       "algorithm": "cpp",
-      "*.txt": "cpp"
+      "*.txt": "cpp",
+      "CMakeLists.txt": "cmake"      
     },
     "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
     "C_Cpp.intelliSenseEngine": "default"
