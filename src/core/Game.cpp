@@ -126,7 +126,7 @@ void Game::render() {
     
     // Create view and projection matrices
     glm::mat4 view = m_camera.getViewMatrix();
-    glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)curWidth / (float)curHeight, 0.1f, 5000.0f);
+    glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)curWidth / (float)curHeight, 0.1f, 5000.0f); 
 
     // --- Render World Chunks ---
     m_chunkShader->use();
@@ -184,6 +184,21 @@ void Game::render() {
         }
     }
     
+    // --- Render Skybox ---
+    glDepthFunc(GL_LEQUAL);
+    m_skyboxShader->use();
+    glm::mat4 skyboxView = glm::mat4(glm::mat3(view)); // Create view matrix without translation
+    m_skyboxShader->setMat4("view", skyboxView);
+    m_skyboxShader->setMat4("projection", projection);
+    
+    // Skybox cube
+    glBindVertexArray(m_skyboxVao);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, m_cubemapTexture);
+    glDrawArrays(GL_TRIANGLES, 0, 36);
+    glBindVertexArray(0);
+    glDepthFunc(GL_LESS); // Set depth function back to default   
+
     // Render the ImGui overlay
     renderImGui();
 }
@@ -684,12 +699,16 @@ void Game::initImGui() {
 void Game::initShaders() {
     m_chunkShader = std::make_unique<Shader>("shaders/world/shader.vert", "shaders/world/shader.frag");
     m_selectedBlockShader = std::make_unique<Shader>("shaders/selectedBlock/shader.vert", "shaders/selectedBlock/shader.frag");
+    m_skyboxShader = std::make_unique<Shader>("shaders/skybox/shader.vert", "shaders/skybox/shader.frag");
     
     m_chunkShader->use();
     m_chunkShader->setInt("text", 0);
 
     m_selectedBlockShader->use();
     m_selectedBlockShader->setInt("text", 0);
+
+    m_skyboxShader->use();
+    m_skyboxShader->setInt("skybox", 0);    
 }
 
 void Game::initTextures() {
@@ -726,6 +745,44 @@ void Game::initTextures() {
     }
     
     stbi_image_free(data);
+
+    std::vector<std::string> faces {
+        "assets/skybox/right.bmp",
+        "assets/skybox/left.bmp",
+        "assets/skybox/top.bmp",
+        "assets/skybox/bottom.bmp",
+        "assets/skybox/front.bmp",
+        "assets/skybox/back.bmp"
+    };
+    loadCubemap(faces);    
+}
+
+void Game::loadCubemap(std::vector<std::string> faces) {
+    glGenTextures(1, &m_cubemapTexture);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, m_cubemapTexture);
+
+    int width, height, nrChannels;
+    stbi_set_flip_vertically_on_load(false); // Cubemaps are often oriented top-left
+
+    for (unsigned int i = 0; i < faces.size(); i++) {
+        unsigned char *data = stbi_load(faces[i].c_str(), &width, &height, &nrChannels, 0);
+        if (data) {
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 
+                         0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+            stbi_image_free(data);
+        } else {
+            std::cerr << "Cubemap texture failed to load at path: " << faces[i] << std::endl;
+            stbi_image_free(data);
+        }
+    }
+    
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    stbi_set_flip_vertically_on_load(true); // Set it back for other textures
 }
 
 void Game::initRenderObjects() {
@@ -754,6 +811,19 @@ void Game::initRenderObjects() {
     glEnableVertexAttribArray(2);
     
     glBindVertexArray(0);
+
+    glGenVertexArrays(1, &m_skyboxVao);
+    glGenBuffers(1, &m_skyboxVbo);
+
+    glBindVertexArray(m_skyboxVao);
+    glBindBuffer(GL_ARRAY_BUFFER, m_skyboxVbo);
+    glBufferData(GL_ARRAY_BUFFER, SKYBOX_VERTICES_SIZE, &skyboxVertices, GL_STATIC_DRAW);
+
+    // Position attribute
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    glBindVertexArray(0);    
 }
 
 void Game::onMouseMovement(double xpos, double ypos) {
@@ -873,6 +943,9 @@ void Game::cleanup() {
     glDeleteTextures(1, &m_textureAtlas);
     glDeleteVertexArrays(1, &m_selectedBlockVao);
     glDeleteBuffers(1, &m_selectedBlockVbo);
+    glDeleteVertexArrays(1, &m_skyboxVao);
+    glDeleteBuffers(1, &m_skyboxVbo);
+    glDeleteTextures(1, &m_cubemapTexture);    
     
     // Shutdown ImGui and GLFW
     ImGui_ImplOpenGL3_Shutdown();

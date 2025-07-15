@@ -38,6 +38,9 @@ private:
     // Shaders and Render Objects
     std::unique_ptr<Shader> m_chunkShader;       
     std::unique_ptr<Shader> m_selectedBlockShader; 
+    std::unique_ptr<Shader> m_skyboxShader;
+    GLuint m_skyboxVao, m_skyboxVbo;
+    GLuint m_cubemapTexture;    
     GLuint m_textureAtlas;
     GLuint m_selectedBlockVao, m_selectedBlockVbo;
 
@@ -91,4 +94,7 @@ private:
     void onMouseMovement(double xpos, double ypos);
     static void framebuffer_size_callback(GLFWwindow* window, int width, int height);
     static void mouse_callback_router(GLFWwindow* window, double xpos, double ypos);
+
+    // skybox Loading
+    void loadCubemap(std::vector<std::string> faces);
 };

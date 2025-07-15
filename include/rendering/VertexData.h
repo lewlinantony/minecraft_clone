@@ -11,5 +11,7 @@ extern float bottomFace[];
 extern float* faceVertices[6];
 
 extern float cubeVertices[];
-
 extern const size_t CUBE_VERTICES_SIZE;
+
+extern float skyboxVertices[];
+extern const size_t SKYBOX_VERTICES_SIZE;
