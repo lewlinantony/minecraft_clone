@@ -1,13 +1,4 @@
 #include "core/Game.h"
-#include <iostream>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
-#include <stb/stb_image.h>
-#include <imgui/imgui.h>
-#include <imgui/imgui_impl_glfw.h>
-#include <imgui/imgui_impl_opengl3.h>
-#include "rendering/VertexData.h"
-
 
 void Game::processInput() {
     // Window and Mouse Lock
@@ -95,19 +86,19 @@ void Game::processInput() {
     // Block Placement
     bool mouseRightIsPressed = glfwGetMouseButton(m_window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
     if (mouseRightIsPressed && !m_input.mouseRightWasPressed && m_previousBlock != glm::ivec3(INT_MAX)) {
-        m_world.setBlock(m_previousBlock, m_curBlockType); 
+        m_world.setBlock(m_previousBlock, curBlockType); 
         calculateChunkAndNeighbors(m_previousBlock);
     }
     m_input.mouseRightWasPressed = mouseRightIsPressed;
 
     if (glfwGetKey(m_window, GLFW_KEY_1) == GLFW_PRESS) {
-        m_curBlockType = 1;
+        curBlockType = 1;
     }
     if (glfwGetKey(m_window, GLFW_KEY_2) == GLFW_PRESS) {
-        m_curBlockType = 2;
+        curBlockType = 2;
     }
     if (glfwGetKey(m_window, GLFW_KEY_3) == GLFW_PRESS) {
-        m_curBlockType = 3;
+        curBlockType = 3;
     }    
 }
 
@@ -822,7 +813,7 @@ Game::Game() :
     m_collisionGap(0.01f), m_collisionMargin(0.5f),
     m_selectedBlock(glm::ivec3(INT_MAX)),
     m_previousBlock(glm::ivec3(INT_MAX)),
-    m_curBlockType(1)
+    curBlockType(1)
     {}
 
 void Game::init() {

@@ -2,6 +2,8 @@
 
 #include "config.h"
 
+
+// INPUT MANAGERS
 struct InputManager {
     // Mouse State
     bool firstMouse = true;

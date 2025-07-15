@@ -1,15 +1,14 @@
 #include "core/Game.h"
-#include <iostream>
 
 int main() {
     Game game;
-    try {
-        game.init();
-        game.run();
-    } catch (const std::exception& e) {
-        std::cerr << "An error occurred: " << e.what() << std::endl;
-        return -1;
-    }
+    std::cout<<"Constructor"<<std::endl;
+    game.init();
+    std::cout<<"init"<<std::endl;    
+    game.run();
+    std::cout<<"run"<<std::endl;    
     game.cleanup();
     return 0;
 }
+
+

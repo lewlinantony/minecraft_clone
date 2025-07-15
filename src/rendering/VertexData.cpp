@@ -1,8 +1,6 @@
 #include "rendering/VertexData.h"
 
-// Define the size constant. This is the only place where sizeof(cubeVertices)
-const size_t CUBE_VERTICES_SIZE = CUBE_VERTICES_SIZE;
-
+// face coords
 float topFace[] = {
     // Top face (+Y) → faceID = 0
      0.5f,  0.5f, -0.5f,  0.0f, 0.0f, 0.0f,
@@ -64,12 +62,12 @@ float bottomFace[] = {
 };
 
 float* faceVertices[6] = {
-    topFace,
-    frontFace,
-    rightFace,
-    backFace,
-    leftFace,
-    bottomFace
+    topFace,     // faceID = 0
+    frontFace,   // faceID = 1
+    rightFace,   // faceID = 2
+    backFace,    // faceID = 3
+    leftFace,    // faceID = 4
+    bottomFace   // faceID = 5
 };
 
 float cubeVertices[] = {
@@ -120,4 +118,7 @@ float cubeVertices[] = {
     -0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 5.0f,
     -0.5f, -0.5f,  0.5f,  0.0f, 1.0f, 5.0f,
      0.5f, -0.5f,  0.5f,  1.0f, 1.0f, 5.0f,
+
 };
+
+const size_t CUBE_VERTICES_SIZE = sizeof(cubeVertices);

@@ -1,5 +1,6 @@
 #include "components/World.h"
 
+
 Block* World::getBlock(glm::ivec3 blockPosition) {
     glm::ivec3 chunkCoord = getChunkOrigin(blockPosition);
 

@@ -3,12 +3,12 @@
 #include <unordered_map>
 #include <vector>
 #include <glm/glm.hpp>
-#include <FastNoiseLite/FastNoiseLite.h> // noise  
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include "Chunk.h"
-#include "Block.h"
-#include "utils/GlmHash.h"
 #include <glad/glad.h>
-
+#include <FastNoiseLite/FastNoiseLite.h> // For noise generation
+#include "utils/GlmHash.h"
 
 // WORLD GEN AND STORING
 struct World {

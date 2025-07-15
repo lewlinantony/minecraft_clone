@@ -1,7 +1,10 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
+// Bounding box
 struct BoundingBox {
     glm::vec3 max;
     glm::vec3 min;

@@ -2,7 +2,9 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
+// CAMERA
 struct Camera {
     // State
     glm::vec3 position; // Will be updated from Player's position

@@ -1,18 +1,18 @@
 #pragma once
 
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
-#include <glm/glm.hpp>
-#include <vector>
-#include <memory>
-#include "components/Player.h"
 #include "components/Camera.h"
 #include "components/InputManager.h"
+#include "components/Player.h"
 #include "components/World.h"
-#include "shader/shader.h"
+#include <GLFW/glfw3.h>
+#include <shader/shader.h>
 #include "utils/BoundingBox.h"
-
-
+#include <imgui/imgui.h>
+#include <imgui/imgui_impl_glfw.h>
+#include <imgui/imgui_impl_opengl3.h>
+#include <iostream>
+#include "rendering/VertexData.h"
+#include <stb/stb_image.h>
 
 
 class Game {
@@ -36,21 +36,25 @@ private:
     bool m_chunkChange = false;
 
     // Shaders and Render Objects
-    std::unique_ptr<Shader> m_chunkShader;
-    std::unique_ptr<Shader> m_selectedBlockShader;
+    std::unique_ptr<Shader> m_chunkShader;       
+    std::unique_ptr<Shader> m_selectedBlockShader; 
     GLuint m_textureAtlas;
     GLuint m_selectedBlockVao, m_selectedBlockVbo;
 
-    // Raycasting State
+    // Raycasting State (as per your request)
     glm::ivec3 m_selectedBlock;
     glm::ivec3 m_previousBlock;
-    int m_curBlockType;
+    int curBlockType;
 
     // Raycasting Configuration
     const float m_rayStart = 0.1f;
     const float m_rayEnd = 4.0f;
     const float m_rayStep = 0.1f;
-    const std::vector<glm::vec3> m_rayStarts;
+    const std::vector<glm::vec3> m_rayStarts = {
+        glm::vec3(0), glm::vec3(0.05f, 0, 0), glm::vec3(-0.05f, 0, 0),
+        glm::vec3(0, 0.05f, 0), glm::vec3(0, -0.05f, 0), glm::vec3(0, 0, 0.05f),
+        glm::vec3(0, 0, -0.05f)
+    };
 
     // Collision constants
     const float m_collisionGap = 0.01f;

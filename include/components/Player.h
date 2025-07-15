@@ -1,5 +1,10 @@
 #pragma once
 
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
+// PLAYER
 struct Player {
     // State
     glm::vec3 position = glm::vec3(0.0f, 30.0f, 0.0f);
