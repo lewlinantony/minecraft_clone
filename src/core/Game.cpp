@@ -383,7 +383,7 @@ void Game::generateChunkData(glm::ivec3 chunkCoord) {
     });
 }
 
-void Game::createChunkMesh(glm::ivec3 chunkCoord) {
+void Game::createChunkMesh(glm::ivec3 chunkCoord, bool forceUpdate ) {
     // 1. Create a local vector to hold the mesh data for this chunk.
     std::vector<float> meshData;
 
@@ -397,34 +397,26 @@ void Game::createChunkMesh(glm::ivec3 chunkCoord) {
         glm::vec3(0.0f, -1.0f, 0.0f)  // Bottom
     };
 
-    // 2. Iterate through every block in the chunk.
+    // 2. Iterate through every block in the chunk to build the mesh.
+    // (This part of your code is the same)
     for (int x = 0; x < CHUNK_SIZE; x++) {
         for (int y = 0; y < CHUNK_SIZE; y++) {
             for (int z = 0; z < CHUNK_SIZE; z++) {
-                // Get the block type safely using the thread-safe getBlock method.
                 glm::ivec3 blockPosition = chunkCoord + glm::ivec3(x, y, z);
                 Block* block = m_world.getBlock(blockPosition);
-                if (!block || block->type == 0) continue; // Skip air blocks
+                if (!block || block->type == 0) continue;
 
-                // 3. For non-air blocks, find which faces are visible.
                 for (int faceID : getVisibleFaces(blockPosition)) {
                     const float* curFace = faceVertices[faceID];
                     if (!curFace) continue;
-
                     const glm::vec3 normal = normals[faceID];
-
-                    // 4. Add the 6 vertices for each visible face to our mesh data.
                     for (int i = 0; i < 6; ++i) {
                         int idx = i * 6;
                         meshData.insert(meshData.end(), {
-                            curFace[idx + 0] + blockPosition.x, // vx
-                            curFace[idx + 1] + blockPosition.y, // vy
-                            curFace[idx + 2] + blockPosition.z, // vz
-                            curFace[idx + 3],                   // u
-                            curFace[idx + 4],                   // v
-                            curFace[idx + 5],                   // Face ID
-                            static_cast<float>(block->type),    // Block Type
-                            normal.x, normal.y, normal.z        // Normals
+                            curFace[idx + 0] + blockPosition.x, curFace[idx + 1] + blockPosition.y, curFace[idx + 2] + blockPosition.z,
+                            curFace[idx + 3], curFace[idx + 4], curFace[idx + 5],
+                            static_cast<float>(block->type),
+                            normal.x, normal.y, normal.z
                         });
                     }
                 }
@@ -432,8 +424,7 @@ void Game::createChunkMesh(glm::ivec3 chunkCoord) {
         }
     }
 
-    // 5. Lock the ready queue and push the finished result.
-    if (!meshData.empty()) {
+    if (!meshData.empty() || forceUpdate) {
         std::lock_guard<std::mutex> lock(m_readyMeshesMutex);
         m_readyMeshes.push({chunkCoord, std::move(meshData)});
     }
@@ -631,7 +622,7 @@ void Game::calculateChunkAndNeighbors(glm::ivec3 block) {
     // A lambda to simplify enqueueing the meshing task
     auto remesh = [this](glm::ivec3 coord) {
         m_threadPool->enqueue([this, coord] {
-            this->createChunkMesh(coord);
+            this->createChunkMesh(coord, true);
         });
     };
 

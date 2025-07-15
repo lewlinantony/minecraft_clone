@@ -97,7 +97,7 @@ private:
     std::vector<int> getVisibleFaces(glm::ivec3 block);
 
     void generateChunkData(glm::ivec3 chunkCoord);
-    void createChunkMesh(glm::ivec3 chunkCoord);
+    void createChunkMesh(glm::ivec3 chunkCoord, bool forceUpdate = false);
     void uploadReadyMeshes();    
 
     // Collision
