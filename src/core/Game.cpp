@@ -110,6 +110,9 @@ void Game::update() {
         generateTerrain();
         m_chunkChange = false;
     }
+
+    uploadReadyMeshes();
+
     // Update camera position to follow player's eyes
     m_camera.position = m_player.position + glm::vec3(0.0f, m_player.eyeHeight, 0.0f);
     performRaycasting();
@@ -317,45 +320,185 @@ void Game::generateTerrain() {
                 }
                 
                 glm::ivec3 chunkOrigin = playerChunkOrigin + glm::ivec3(cx, cy, cz) * CHUNK_SIZE;
-                // If chunk data already exists, skip it
-                if (m_world.chunkMap.count(chunkOrigin)) {
+                m_world.chunkDataMutex.lock(); // Lock manually
+
+                bool chunkExists = m_world.chunkMap.count(chunkOrigin);
+                m_world.chunkDataMutex.unlock();
+
+                // If the chunk already exists, we are done with this iteration
+                if (chunkExists) {
                     continue;
                 }
+
                 
-                // Chunk does not exist, so generate its block data
-                Chunk& currentChunk = m_world.chunkMap[chunkOrigin];
-                newChunksToMesh.push_back(chunkOrigin);
+                m_threadPool->enqueue([this, chunkOrigin] {
+                    this->generateChunkData(chunkOrigin);
+                });
+            }
+        }
+    }
+}
 
-                for (int x = 0; x < CHUNK_SIZE; x++) {
-                    for (int z = 0; z < CHUNK_SIZE; z++) {
-                        float globalX = (float)(chunkOrigin.x + x);
-                        float globalZ = (float)(chunkOrigin.z + z);
-                        float height = m_world.noise.GetNoise(globalX, globalZ) * m_world.amplitude; // Scale noise to 0-2*amp
-                        height = glm::round(height);
+void Game::generateChunkData(glm::ivec3 chunkCoord) {
+    // 1. Create a temporary, local chunk to store block data.
+    Chunk newChunk;
 
-                        for (int y = 0; y < CHUNK_SIZE; y++) {
-                            int globalY = chunkOrigin.y + y;
-                            if (globalY > height) {
-                                currentChunk.blocks[x][y][z].type = 0; // Air
-                            } else if (globalY == (int)height) {
-                                currentChunk.blocks[x][y][z].type = 1; // Grass
-                            } else if (globalY >= height - 5) {
-                                currentChunk.blocks[x][y][z].type = 2; // Dirt
-                            } else if (globalY >= -40) {
-                                currentChunk.blocks[x][y][z].type = 3; // Stone
-                            }
-                        }
+    // 2. Iterate through every block position within this chunk's volume.
+    for (int x = 0; x < CHUNK_SIZE; x++) {
+        for (int z = 0; z < CHUNK_SIZE; z++) {
+            // Calculate global coordinates for noise generation
+            float globalX = (float)(chunkCoord.x + x);
+            float globalZ = (float)(chunkCoord.z + z);
+
+            // Get the surface height from the noise function
+            float height = m_world.noise.GetNoise(globalX, globalZ) * m_world.amplitude;
+            height = glm::round(height);
+
+            for (int y = 0; y < CHUNK_SIZE; y++) {
+                int globalY = chunkCoord.y + y;
+
+                // Determine block type based on height
+                if (globalY > height) {
+                    newChunk.blocks[x][y][z].type = 0; // Air
+                } else if (globalY == (int)height) {
+                    newChunk.blocks[x][y][z].type = 1; // Grass
+                } else if (globalY >= height - 5) {
+                    newChunk.blocks[x][y][z].type = 2; // Dirt
+                } else {
+                    newChunk.blocks[x][y][z].type = 3; // Stone
+                }
+            }
+        }
+    }
+
+    // 3. Lock the world's data and insert the newly generated chunk.
+    {
+        std::lock_guard<std::mutex> lock(m_world.chunkDataMutex);
+        m_world.chunkMap[chunkCoord] = newChunk;
+    }
+
+    // 4. Now that the data exists, enqueue a job to create its mesh.
+    m_threadPool->enqueue([this, chunkCoord] {
+        this->createChunkMesh(chunkCoord);
+    });
+}
+
+void Game::createChunkMesh(glm::ivec3 chunkCoord) {
+    // 1. Create a local vector to hold the mesh data for this chunk.
+    std::vector<float> meshData;
+
+    // These normals correspond to the 6 faces of a cube
+    const glm::vec3 normals[6] = {
+        glm::vec3(0.0f, 1.0f, 0.0f),  // Top
+        glm::vec3(0.0f, 0.0f, -1.0f), // Front
+        glm::vec3(-1.0f, 0.0f, 0.0f), // Right
+        glm::vec3(0.0f, 0.0f, 1.0f),  // Back
+        glm::vec3(1.0f, 0.0f, 0.0f),  // Left
+        glm::vec3(0.0f, -1.0f, 0.0f)  // Bottom
+    };
+
+    // 2. Iterate through every block in the chunk.
+    for (int x = 0; x < CHUNK_SIZE; x++) {
+        for (int y = 0; y < CHUNK_SIZE; y++) {
+            for (int z = 0; z < CHUNK_SIZE; z++) {
+                // Get the block type safely using the thread-safe getBlock method.
+                glm::ivec3 blockPosition = chunkCoord + glm::ivec3(x, y, z);
+                Block* block = m_world.getBlock(blockPosition);
+                if (!block || block->type == 0) continue; // Skip air blocks
+
+                // 3. For non-air blocks, find which faces are visible.
+                for (int faceID : getVisibleFaces(blockPosition)) {
+                    const float* curFace = faceVertices[faceID];
+                    if (!curFace) continue;
+
+                    const glm::vec3 normal = normals[faceID];
+
+                    // 4. Add the 6 vertices for each visible face to our mesh data.
+                    for (int i = 0; i < 6; ++i) {
+                        int idx = i * 6;
+                        meshData.insert(meshData.end(), {
+                            curFace[idx + 0] + blockPosition.x, // vx
+                            curFace[idx + 1] + blockPosition.y, // vy
+                            curFace[idx + 2] + blockPosition.z, // vz
+                            curFace[idx + 3],                   // u
+                            curFace[idx + 4],                   // v
+                            curFace[idx + 5],                   // Face ID
+                            static_cast<float>(block->type),    // Block Type
+                            normal.x, normal.y, normal.z        // Normals
+                        });
                     }
                 }
             }
         }
     }
 
-    // After generating block data, create the meshes for the new chunks
-    for (const auto& chunkCoord : newChunksToMesh) {
-        calculateChunk(chunkCoord);
+    // 5. Lock the ready queue and push the finished result.
+    if (!meshData.empty()) {
+        std::lock_guard<std::mutex> lock(m_readyMeshesMutex);
+        m_readyMeshes.push({chunkCoord, std::move(meshData)});
     }
 }
+
+void Game::uploadReadyMeshes() {
+    // Process only one mesh per frame to prevent hitches from uploading too much at once.
+    if (m_readyMeshes.empty()) {
+        return;
+    }
+
+    // 1. Lock the queue, grab one result, and unlock quickly.
+    m_readyMeshesMutex.lock();
+    ChunkMeshResult result = m_readyMeshes.front();
+    m_readyMeshes.pop();
+    m_readyMeshesMutex.unlock();
+
+    // 2. Lock the world data while we interact with OpenGL objects and maps.
+    std::lock_guard<std::mutex> lock(m_world.chunkDataMutex);
+
+    GLuint chunkVAO, chunkVBO;
+
+    // 3. Check if this chunk already has a VAO/VBO.
+    if (m_world.chunkVaoMap.find(result.chunkCoord) == m_world.chunkVaoMap.end()) {
+        // If not, create them.
+        glGenVertexArrays(1, &chunkVAO);
+        glGenBuffers(1, &chunkVBO);
+        m_world.chunkVaoMap[result.chunkCoord] = chunkVAO;
+        m_world.chunkVboMap[result.chunkCoord] = chunkVBO;
+
+        glBindVertexArray(chunkVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, chunkVBO);
+
+        // Set up vertex attribute pointers for our 10-float stride
+        int stride = 10 * sizeof(float);
+        // Position
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
+        glEnableVertexAttribArray(0);
+        // UV Coords
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
+        glEnableVertexAttribArray(1);
+        // Face ID
+        glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, stride, (void*)(5 * sizeof(float)));
+        glEnableVertexAttribArray(2);
+        // Block Type
+        glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, stride, (void*)(6 * sizeof(float)));
+        glEnableVertexAttribArray(3);
+        // Normal
+        glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, stride, (void*)(7 * sizeof(float)));
+        glEnableVertexAttribArray(4);
+    } else {
+        // If they exist, just get the handle.
+        chunkVBO = m_world.chunkVboMap.at(result.chunkCoord);
+        glBindBuffer(GL_ARRAY_BUFFER, chunkVBO);
+    }
+
+    // 4. Upload the vertex data to the VBO.
+    if (!result.meshData.empty()) {
+        glBufferData(GL_ARRAY_BUFFER, result.meshData.size() * sizeof(float), result.meshData.data(), GL_DYNAMIC_DRAW);
+    }
+
+    // 5. Store the mesh data in the world for the render loop to know its size.
+    m_world.chunkMeshData[result.chunkCoord] = std::move(result.meshData);
+}
+
 
 std::vector<int> Game::getVisibleFaces(glm::ivec3 block) {
     std::vector<int> visibleFaces;
@@ -485,26 +628,33 @@ void Game::calculateChunkAndNeighbors(glm::ivec3 block) {
     glm::ivec3 chunkCoord = m_world.getChunkOrigin(block);
     glm::ivec3 blockOffset = block - chunkCoord;
 
-    // Always recalculate the mesh for the chunk the block is in
-    calculateChunk(chunkCoord);
+    // A lambda to simplify enqueueing the meshing task
+    auto remesh = [this](glm::ivec3 coord) {
+        m_threadPool->enqueue([this, coord] {
+            this->createChunkMesh(coord);
+        });
+    };
 
-    // If the block is on a boundary, the neighbor chunk's mesh is also affected
+    // Always remesh the chunk the block is in
+    remesh(chunkCoord);
+
+    // If the block is on a boundary, remesh the neighbor chunk too
     if (blockOffset.x == 0) {
-        calculateChunk(chunkCoord + glm::ivec3(-CHUNK_SIZE, 0, 0));
+        remesh(chunkCoord + glm::ivec3(-CHUNK_SIZE, 0, 0));
     } else if (blockOffset.x == CHUNK_SIZE - 1) {
-        calculateChunk(chunkCoord + glm::ivec3(CHUNK_SIZE, 0, 0));
+        remesh(chunkCoord + glm::ivec3(CHUNK_SIZE, 0, 0));
     }
     
     if (blockOffset.y == 0) {
-        calculateChunk(chunkCoord + glm::ivec3(0, -CHUNK_SIZE, 0));
+        remesh(chunkCoord + glm::ivec3(0, -CHUNK_SIZE, 0));
     } else if (blockOffset.y == CHUNK_SIZE - 1) {
-        calculateChunk(chunkCoord + glm::ivec3(0, CHUNK_SIZE, 0));
+        remesh(chunkCoord + glm::ivec3(0, CHUNK_SIZE, 0));
     }
 
     if (blockOffset.z == 0) {
-        calculateChunk(chunkCoord + glm::ivec3(0, 0, -CHUNK_SIZE));
+        remesh(chunkCoord + glm::ivec3(0, 0, -CHUNK_SIZE));
     } else if (blockOffset.z == CHUNK_SIZE - 1) {
-        calculateChunk(chunkCoord + glm::ivec3(0, 0, CHUNK_SIZE));
+        remesh(chunkCoord + glm::ivec3(0, 0, CHUNK_SIZE));
     }
 }
 
@@ -903,6 +1053,8 @@ void Game::init() {
     m_world.noise.SetFractalLacunarity(m_world.g_NoiseLacunarity);
     m_world.noise.SetFrequency(m_world.g_NoiseFrequency);
 
+    unsigned int num_threads = std::thread::hardware_concurrency();
+    m_threadPool = std::make_unique<ThreadPool>(num_threads > 1 ? num_threads - 1 : 1);  
 
     m_player.position = glm::vec3(0.0f, (m_world.noise.GetNoise(0.0f, 0.0f) + 1. * m_world.amplitude) + 3.0f, 0.0f);
 

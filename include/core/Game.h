@@ -1,18 +1,26 @@
 #pragma once
 
+#include <iostream>
+#include <glad/glad.h> 
+#include <GLFW/glfw3.h>
+#include <stb/stb_image.h>
+#include <imgui/imgui.h>
+#include <imgui/imgui_impl_glfw.h>
+#include <imgui/imgui_impl_opengl3.h>
+#include "rendering/VertexData.h"
 #include "components/Camera.h"
 #include "components/InputManager.h"
 #include "components/Player.h"
 #include "components/World.h"
-#include <GLFW/glfw3.h>
-#include <shader/shader.h>
 #include "utils/BoundingBox.h"
-#include <imgui/imgui.h>
-#include <imgui/imgui_impl_glfw.h>
-#include <imgui/imgui_impl_opengl3.h>
-#include <iostream>
-#include "rendering/VertexData.h"
-#include <stb/stb_image.h>
+#include "utils/ThreadPool.h"
+#include <shader/shader.h>
+
+
+struct ChunkMeshResult {
+    glm::ivec3 chunkCoord;
+    std::vector<float> meshData;
+};
 
 
 class Game {
@@ -63,6 +71,17 @@ private:
     const float m_collisionGap = 0.01f;
     const float m_collisionMargin = 0.5f;
 
+    // thread pool 
+    std::unique_ptr<ThreadPool> m_threadPool; 
+
+    // Thread-safe queue for chunk mesh results
+    std::queue<ChunkMeshResult> m_readyMeshes;
+    std::mutex m_readyMeshesMutex; // Mutex to protect the queue
+
+
+
+
+
     // Core Methods
     void processInput();
     void update();
@@ -76,6 +95,10 @@ private:
     void calculateChunk(glm::ivec3 chunkCoord);
     void calculateChunkAndNeighbors(glm::ivec3 block);
     std::vector<int> getVisibleFaces(glm::ivec3 block);
+
+    void generateChunkData(glm::ivec3 chunkCoord);
+    void createChunkMesh(glm::ivec3 chunkCoord);
+    void uploadReadyMeshes();    
 
     // Collision
     bool boxBoxOverlap(const BoundingBox& playerBox, const BoundingBox& blockBox) const;

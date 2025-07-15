@@ -2,12 +2,11 @@
 
 #include <unordered_map>
 #include <vector>
+#include <mutex>
 #include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
+#include <FastNoiseLite/FastNoiseLite.h> // For noise generation
 #include "Chunk.h"
 #include <glad/glad.h>
-#include <FastNoiseLite/FastNoiseLite.h> // For noise generation
 #include "utils/GlmHash.h"
 
 // WORLD GEN AND STORING
@@ -19,8 +18,8 @@ struct World {
     std::unordered_map<glm::ivec3, GLuint> chunkVaoMap;
 
     // Configuration
-    int Y_RENDER_DIST = 3;
-    int XZ_RENDER_DIST = 10;
+    int Y_RENDER_DIST = 4;
+    int XZ_RENDER_DIST = 30;
     int Y_LOAD_DIST = Y_RENDER_DIST+1;
     int XZ_LOAD_DIST = XZ_RENDER_DIST+1;
 
@@ -32,6 +31,9 @@ struct World {
     float g_NoiseFrequency  = 0.01f;
     float amplitude         = 10.0f;
     int   g_NoiseSeed       = 133;
+
+    // mutex for thread safety
+    std::mutex chunkDataMutex;    
 
     // Methods
     Block* getBlock(glm::ivec3 blockPosition);

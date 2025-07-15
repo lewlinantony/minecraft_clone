@@ -4,6 +4,8 @@
 Block* World::getBlock(glm::ivec3 blockPosition) {
     glm::ivec3 chunkCoord = getChunkOrigin(blockPosition);
 
+    // Lock the mutex to ensure thread safety when accessing chunk data
+    std::lock_guard<std::mutex> lock(chunkDataMutex);
 
     // Check if the chunk exists
     auto it = chunkMap.find(chunkCoord);
@@ -30,6 +32,10 @@ glm::ivec3 World::getChunkOrigin(glm::ivec3 blockPosition) {
 }
 void World::setBlock(glm::ivec3 blockPosition, int type) {
     glm::ivec3 chunkCoord = getChunkOrigin(blockPosition);
+
+    // Lock the mutex to ensure thread safety when accessing chunk data
+    std::lock_guard<std::mutex> lock(chunkDataMutex);
+
     // Find the chunk in the map. If it exists, modify it.
     auto it = chunkMap.find(chunkCoord);
     if (it != chunkMap.end()) {
