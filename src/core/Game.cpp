@@ -340,10 +340,10 @@ void Game::generateTerrain() {
 }
 
 void Game::generateChunkData(glm::ivec3 chunkCoord) {
-    // 1. Create a temporary, local chunk to store block data.
+    // temporary chunk to store block data.
     Chunk newChunk;
 
-    // 2. Iterate through every block position within this chunk's volume.
+    // iterate through every block position within this chunk's volume.
     for (int x = 0; x < CHUNK_SIZE; x++) {
         for (int z = 0; z < CHUNK_SIZE; z++) {
             // Calculate global coordinates for noise generation
@@ -371,20 +371,20 @@ void Game::generateChunkData(glm::ivec3 chunkCoord) {
         }
     }
 
-    // 3. Lock the world's data and insert the newly generated chunk.
+    // Lock the world's data and insert the newly generated chunk.
     {
         std::lock_guard<std::mutex> lock(m_world.chunkDataMutex);
         m_world.chunkMap[chunkCoord] = newChunk;
     }
 
-    // 4. Now that the data exists, enqueue a job to create its mesh.
+    // now that the data exists, enqueue a job to create its mesh.
     m_threadPool->enqueue([this, chunkCoord] {
         this->createChunkMesh(chunkCoord);
     });
 }
 
 void Game::createChunkMesh(glm::ivec3 chunkCoord, bool forceUpdate ) {
-    // 1. Create a local vector to hold the mesh data for this chunk.
+    // Create a local vector to hold the mesh data for this chunk.
     std::vector<float> meshData;
 
     // These normals correspond to the 6 faces of a cube
@@ -397,8 +397,7 @@ void Game::createChunkMesh(glm::ivec3 chunkCoord, bool forceUpdate ) {
         glm::vec3(0.0f, -1.0f, 0.0f)  // Bottom
     };
 
-    // 2. Iterate through every block in the chunk to build the mesh.
-    // (This part of your code is the same)
+    // iterate through every block in the chunk to build the mesh.
     for (int x = 0; x < CHUNK_SIZE; x++) {
         for (int y = 0; y < CHUNK_SIZE; y++) {
             for (int z = 0; z < CHUNK_SIZE; z++) {
@@ -436,18 +435,18 @@ void Game::uploadReadyMeshes() {
         return;
     }
 
-    // 1. Lock the queue, grab one result, and unlock quickly.
+    // Lock the queue, grab one result, and unlock quickly.
     m_readyMeshesMutex.lock();
     ChunkMeshResult result = m_readyMeshes.front();
     m_readyMeshes.pop();
     m_readyMeshesMutex.unlock();
 
-    // 2. Lock the world data while we interact with OpenGL objects and maps.
+    // Lock the world data while we interact with OpenGL objects and maps.
     std::lock_guard<std::mutex> lock(m_world.chunkDataMutex);
 
     GLuint chunkVAO, chunkVBO;
 
-    // 3. Check if this chunk already has a VAO/VBO.
+    // Check if this chunk already has a VAO/VBO.
     if (m_world.chunkVaoMap.find(result.chunkCoord) == m_world.chunkVaoMap.end()) {
         // If not, create them.
         glGenVertexArrays(1, &chunkVAO);
@@ -481,12 +480,12 @@ void Game::uploadReadyMeshes() {
         glBindBuffer(GL_ARRAY_BUFFER, chunkVBO);
     }
 
-    // 4. Upload the vertex data to the VBO.
+    // upload the vertex data to the VBO.
     if (!result.meshData.empty()) {
         glBufferData(GL_ARRAY_BUFFER, result.meshData.size() * sizeof(float), result.meshData.data(), GL_DYNAMIC_DRAW);
     }
 
-    // 5. Store the mesh data in the world for the render loop to know its size.
+    // store the mesh data in the world for the render loop to know its size.
     m_world.chunkMeshData[result.chunkCoord] = std::move(result.meshData);
 }
 
