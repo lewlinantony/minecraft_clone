@@ -29,6 +29,7 @@ set(SOURCE_FILES
     src/core/Game.cpp
     src/components/World.cpp
     src/rendering/VertexData.cpp
+    src/utils/ThreadPool.cpp
 )
 
 # Create the final executable from the source files
