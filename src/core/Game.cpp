@@ -100,13 +100,14 @@ void Game::processInput() {
     if (glfwGetKey(m_window, GLFW_KEY_3) == GLFW_PRESS) {
         curBlockType = 3;
     }    
+
 }
 
 void Game::update() {
     if (!m_player.creativeMode) {
         updatePhysics();
     }
-    if (m_chunkChange) {
+    if (m_chunkChange && !firstLoad) {
         generateTerrain();
         m_chunkChange = false;
     }
@@ -116,6 +117,68 @@ void Game::update() {
     // Update camera position to follow player's eyes
     m_camera.position = m_player.position + glm::vec3(0.0f, m_player.eyeHeight, 0.0f);
     performRaycasting();
+}
+
+void Game::renderLoadingScreen() {
+    // Clear the screen to a dark, neutral color
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // Start a new ImGui frame
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    // --- Center the Loading Window ---
+    int width, height;
+    glfwGetWindowSize(m_window, &width, &height);
+    ImVec2 window_pos = ImVec2(width * 0.5f, height * 0.5f);
+    ImGui::SetNextWindowPos(window_pos, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(320, 130)); // Existing size is sufficient
+
+    // --- Begin the Window ---
+    ImGui::Begin("Loading", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove);
+
+    // --- Static "Loading World" Text ---
+    ImGui::Dummy(ImVec2(0.0f, 20.0f)); // Add some padding at the top
+    const char* title_text = "Loading World";
+
+    // Scale up the font for the title
+    ImGui::SetWindowFontScale(1.8f);
+    ImVec2 text_size = ImGui::CalcTextSize(title_text);
+
+    // Center the title text horizontally
+    ImGui::SetCursorPosX((ImGui::GetWindowSize().x - text_size.x) * 0.5f);
+    ImGui::Text("%s", title_text);
+
+    // Reset font scale for the animated part
+    ImGui::SetWindowFontScale(1.0f);
+    ImGui::Dummy(ImVec2(0.0f, 15.0f)); // Space between title and animation
+
+    // --- Animated Asterisks (Extended) ---
+    // Use time to cycle through more frames (0 to 5)
+    int frame = static_cast<int>(glfwGetTime() * 3.0) % 6;
+    const char* animated_chars;
+    switch (frame) {
+        case 0:  animated_chars = "*";               break;
+        case 1:  animated_chars = "* *";            break;
+        case 2:  animated_chars = "* * *";          break;
+        case 3:  animated_chars = "* * * *";        break;
+        case 4:
+        case 5:
+        default: animated_chars = "* * * * *";      break; // Hold the last frame
+    }
+
+    ImVec2 animated_text_size = ImGui::CalcTextSize(animated_chars);
+    // Center the animated characters horizontally
+    ImGui::SetCursorPosX((ImGui::GetWindowSize().x - animated_text_size.x) * 0.5f);
+    ImGui::Text("%s", animated_chars);
+
+    ImGui::End();
+
+    // Render the final ImGui draw data
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
 void Game::render() {
@@ -129,7 +192,7 @@ void Game::render() {
     
     // Create view and projection matrices
     glm::mat4 view = m_camera.getViewMatrix();
-    glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)curWidth / (float)curHeight, 0.1f, 5000.0f); 
+    glm::mat4 projection = glm::perspective(glm::radians(FOV), (float)curWidth / (float)curHeight, 0.1f, 5000.0f); 
 
     // --- Render World Chunks ---
     m_chunkShader->use();
@@ -308,6 +371,7 @@ void Game::performRaycasting() {
 }
 
 void Game::generateTerrain() {
+    
     std::vector<glm::ivec3> newChunksToMesh;
     glm::ivec3 playerChunkOrigin = m_world.getChunkOrigin(glm::round(m_player.position));
 
@@ -330,6 +394,9 @@ void Game::generateTerrain() {
                     continue;
                 }
 
+                if (firstLoad) {
+                    m_initialChunksToLoad++;
+                }
                 
                 m_threadPool->enqueue([this, chunkOrigin] {
                     this->generateChunkData(chunkOrigin);
@@ -383,9 +450,13 @@ void Game::generateChunkData(glm::ivec3 chunkCoord) {
     });
 }
 
-void Game::createChunkMesh(glm::ivec3 chunkCoord, bool forceUpdate ) {
+void Game::createChunkMesh(glm::ivec3 chunkCoord) {
     // Create a local vector to hold the mesh data for this chunk.
     std::vector<float> meshData;
+
+    // reserving space before hand will prevent reallocations which can be constly overtime
+    // meshData.reserve(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE * 0.1 * 6 * 10);
+
 
     // These normals correspond to the 6 faces of a cube
     const glm::vec3 normals[6] = {
@@ -423,70 +494,85 @@ void Game::createChunkMesh(glm::ivec3 chunkCoord, bool forceUpdate ) {
         }
     }
 
-    if (!meshData.empty() || forceUpdate) {
+    if (!meshData.empty()) {
         std::lock_guard<std::mutex> lock(m_readyMeshesMutex);
         m_readyMeshes.push({chunkCoord, std::move(meshData)});
+    }
+    else {
+        if (firstLoad){
+            m_initialChunksToLoad--;
+        }
     }
 }
 
 void Game::uploadReadyMeshes() {
+
+    double timeBudget = 0.5; 
+    double startTime = glfwGetTime();
+
     // Process only one mesh per frame to prevent hitches from uploading too much at once.
-    if (m_readyMeshes.empty()) {
-        return;
-    }
+    while (!m_readyMeshes.empty() && (glfwGetTime() - startTime) < timeBudget) {
+        // Lock the queue, grab one result, and unlock quickly.
+        m_readyMeshesMutex.lock();
+        ChunkMeshResult result = m_readyMeshes.front();
+        m_readyMeshes.pop();
+        m_readyMeshesMutex.unlock();
+    
+        // Lock the world data while we interact with OpenGL objects and maps.
+        std::lock_guard<std::mutex> lock(m_world.chunkDataMutex);
+    
+        GLuint chunkVAO, chunkVBO;
+    
+        // Check if this chunk already has a VAO/VBO.
+        if (m_world.chunkVaoMap.find(result.chunkCoord) == m_world.chunkVaoMap.end()) {
+            // If not, create them.
+            glGenVertexArrays(1, &chunkVAO);
+            glGenBuffers(1, &chunkVBO);
+            m_world.chunkVaoMap[result.chunkCoord] = chunkVAO;
+            m_world.chunkVboMap[result.chunkCoord] = chunkVBO;
+    
+            glBindVertexArray(chunkVAO);
+            glBindBuffer(GL_ARRAY_BUFFER, chunkVBO);
+    
+            // Set up vertex attribute pointers for our 10-float stride
+            int stride = 10 * sizeof(float);
+            // Position
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
+            glEnableVertexAttribArray(0);
+            // UV Coords
+            glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
+            glEnableVertexAttribArray(1);
+            // Face ID
+            glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, stride, (void*)(5 * sizeof(float)));
+            glEnableVertexAttribArray(2);
+            // Block Type
+            glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, stride, (void*)(6 * sizeof(float)));
+            glEnableVertexAttribArray(3);
+            // Normal
+            glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, stride, (void*)(7 * sizeof(float)));
+            glEnableVertexAttribArray(4);
+        } else {
+            // If they exist, just get the handle.
+            chunkVBO = m_world.chunkVboMap.at(result.chunkCoord);
+            glBindBuffer(GL_ARRAY_BUFFER, chunkVBO);
+        }
+    
+        // upload the vertex data to the VBO.
+        if (!result.meshData.empty()) {
+            glBufferData(GL_ARRAY_BUFFER, result.meshData.size() * sizeof(float), result.meshData.data(), GL_DYNAMIC_DRAW);
+        }
+    
+        // store the mesh data in the world for the render loop to know its size.
+        m_world.chunkMeshData[result.chunkCoord] = std::move(result.meshData);
 
-    // Lock the queue, grab one result, and unlock quickly.
-    m_readyMeshesMutex.lock();
-    ChunkMeshResult result = m_readyMeshes.front();
-    m_readyMeshes.pop();
-    m_readyMeshesMutex.unlock();
 
-    // Lock the world data while we interact with OpenGL objects and maps.
-    std::lock_guard<std::mutex> lock(m_world.chunkDataMutex);
+        if (firstLoad) {
+            if (--m_initialChunksToLoad == 0) {
+                firstLoad = false;
+            }
+        }        
+    }    
 
-    GLuint chunkVAO, chunkVBO;
-
-    // Check if this chunk already has a VAO/VBO.
-    if (m_world.chunkVaoMap.find(result.chunkCoord) == m_world.chunkVaoMap.end()) {
-        // If not, create them.
-        glGenVertexArrays(1, &chunkVAO);
-        glGenBuffers(1, &chunkVBO);
-        m_world.chunkVaoMap[result.chunkCoord] = chunkVAO;
-        m_world.chunkVboMap[result.chunkCoord] = chunkVBO;
-
-        glBindVertexArray(chunkVAO);
-        glBindBuffer(GL_ARRAY_BUFFER, chunkVBO);
-
-        // Set up vertex attribute pointers for our 10-float stride
-        int stride = 10 * sizeof(float);
-        // Position
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
-        glEnableVertexAttribArray(0);
-        // UV Coords
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
-        glEnableVertexAttribArray(1);
-        // Face ID
-        glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, stride, (void*)(5 * sizeof(float)));
-        glEnableVertexAttribArray(2);
-        // Block Type
-        glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, stride, (void*)(6 * sizeof(float)));
-        glEnableVertexAttribArray(3);
-        // Normal
-        glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, stride, (void*)(7 * sizeof(float)));
-        glEnableVertexAttribArray(4);
-    } else {
-        // If they exist, just get the handle.
-        chunkVBO = m_world.chunkVboMap.at(result.chunkCoord);
-        glBindBuffer(GL_ARRAY_BUFFER, chunkVBO);
-    }
-
-    // upload the vertex data to the VBO.
-    if (!result.meshData.empty()) {
-        glBufferData(GL_ARRAY_BUFFER, result.meshData.size() * sizeof(float), result.meshData.data(), GL_DYNAMIC_DRAW);
-    }
-
-    // store the mesh data in the world for the render loop to know its size.
-    m_world.chunkMeshData[result.chunkCoord] = std::move(result.meshData);
 }
 
 
@@ -513,103 +599,6 @@ std::vector<int> Game::getVisibleFaces(glm::ivec3 block) {
     return visibleFaces;
 }
 
-// void Game::calculateChunk(glm::ivec3 chunkCoord) {
-//     // Clear any previous mesh data for this chunk
-//     m_world.chunkMeshData[chunkCoord].clear();
-    
-//     // Ensure the chunk exists in the map
-//     if (m_world.chunkMap.find(chunkCoord) == m_world.chunkMap.end()) {
-//         return; // Cannot mesh a chunk that hasn't had its block data generated
-//     }
-//     Chunk& chunk = m_world.chunkMap.at(chunkCoord);
-
-//     const glm::vec3 normals[6] = {
-//         glm::vec3(0.0f, 1.0f, 0.0f),    // Top (+Y)
-//         glm::vec3(0.0f, 0.0f, -1.0f),   // Front (-Z)
-//         glm::vec3(-1.0f, 0.0f, 0.0f),   // Right (-X)
-//         glm::vec3(0.0f, 0.0f, 1.0f),    // Back (+Z)
-//         glm::vec3(1.0f, 0.0f, 0.0f),    // Left (+X)
-//         glm::vec3(0.0f, -1.0f, 0.0f)    // Bottom (-Y)
-//     };    
-
-//     for (int x = 0; x < CHUNK_SIZE; x++) {
-//         for (int y = 0; y < CHUNK_SIZE; y++) {
-//             for (int z = 0; z < CHUNK_SIZE; z++) {
-//                 if (chunk.blocks[x][y][z].type == 0) continue; // Skip air blocks
-
-//                 glm::ivec3 blockPosition = chunkCoord + glm::ivec3(x, y, z);
-                
-//                 for (int faceID : getVisibleFaces(blockPosition)) {
-//                     const float* curFace = faceVertices[faceID];
-//                     if (!curFace) continue;
-
-//                     const glm::vec3 normal = normals[faceID];
-
-//                     for (int i = 0; i < 6; ++i) { // 6 vertices per face
-//                         int idx = i * 6; // 6 attributes per vertex in face data
-
-//                         // Vertex position 
-//                         float vx = curFace[idx + 0] + blockPosition.x;
-//                         float vy = curFace[idx + 1] + blockPosition.y;
-//                         float vz = curFace[idx + 2] + blockPosition.z;
-
-//                         // Texture coordinates
-//                         float ux = curFace[idx + 3];
-//                         float uy = curFace[idx + 4];
-                        
-//                         // Face ID and Block Type
-//                         float fid = curFace[idx + 5];
-//                         float blockType = static_cast<float>(chunk.blocks[x][y][z].type);
-
-//                         m_world.chunkMeshData[chunkCoord].insert(m_world.chunkMeshData[chunkCoord].end(), {
-//                             vx, vy, vz,           // Position
-//                             ux, uy,               // UV Coords
-//                             fid,                  // Face ID
-//                             blockType,            // Block Type
-//                             normal.x, normal.y, normal.z // Normal
-//                         });
-//                     }
-//                 }
-//             }
-//         }
-//     }
-
-//     GLuint chunkVAO, chunkVBO;
-
-//     // Check if the chunk already has a VAO/VBO.
-//     if (m_world.chunkVaoMap.find(chunkCoord) == m_world.chunkVaoMap.end()) {
-//         glGenVertexArrays(1, &chunkVAO);
-//         glGenBuffers(1, &chunkVBO);
-//         m_world.chunkVaoMap[chunkCoord] = chunkVAO;
-//         m_world.chunkVboMap[chunkCoord] = chunkVBO;
-
-//         glBindVertexArray(chunkVAO);
-//         glBindBuffer(GL_ARRAY_BUFFER, chunkVBO);
-
-//         // Update vertex attribute pointers for the new 10-float stride
-//         int stride = 10 * sizeof(float);
-//         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
-//         glEnableVertexAttribArray(0); // Position
-//         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
-//         glEnableVertexAttribArray(1); // UV Coords
-//         glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, stride, (void*)(5 * sizeof(float)));
-//         glEnableVertexAttribArray(2); // Face ID
-//         glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, stride, (void*)(6 * sizeof(float)));
-//         glEnableVertexAttribArray(3); // Block Type
-//         glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, stride, (void*)(7 * sizeof(float)));
-//         glEnableVertexAttribArray(4); // Normal
-//     } else {
-//         // The chunk already exists, so just get its VBO handle for updating.
-//         chunkVBO = m_world.chunkVboMap.at(chunkCoord);
-//         glBindBuffer(GL_ARRAY_BUFFER, chunkVBO);
-//     }
-    
-//     // Upload the new vertex data to the VBO
-//     if (!m_world.chunkMeshData[chunkCoord].empty()) {
-//         glBufferData(GL_ARRAY_BUFFER, m_world.chunkMeshData[chunkCoord].size() * sizeof(float), m_world.chunkMeshData[chunkCoord].data(), GL_DYNAMIC_DRAW);
-//     }
-// }
-
 void Game::calculateChunkAndNeighbors(glm::ivec3 block) {
     glm::ivec3 chunkCoord = m_world.getChunkOrigin(block);
     glm::ivec3 blockOffset = block - chunkCoord;
@@ -617,7 +606,7 @@ void Game::calculateChunkAndNeighbors(glm::ivec3 block) {
     // A lambda to simplify enqueueing the meshing task
     auto remesh = [this](glm::ivec3 coord) {
         m_threadPool->priority_enqueue([this, coord] {
-            this->createChunkMesh(coord, true);
+            this->createChunkMesh(coord);
         });
     };
 
@@ -1060,22 +1049,45 @@ void Game::run() {
     
     // The main game loop
     while (!glfwWindowShouldClose(m_window)) {
+        if (firstLoad) {
+            // --- LOADING SCREEN LOOP ---
+            glfwPollEvents(); // Keep the window responsive
 
-        float currentFrame = static_cast<float>(glfwGetTime());
-        m_deltaTime = currentFrame - m_lastFrame;
-        m_lastFrame = currentFrame;
+            if (glfwGetKey(m_window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+                glfwSetWindowShouldClose(m_window, true);
+            }            
 
-        if (m_deltaTime > 0.02f) { 
-            m_deltaTime = 0.02f;
+            uploadReadyMeshes();
+
+            // Render our dedicated loading screen
+            renderLoadingScreen();
+
+            // Swap buffers to show the loading screen
+            glfwSwapBuffers(m_window);
+
+        } 
+        else {        
+            float currentFrame = static_cast<float>(glfwGetTime());
+            m_deltaTime = currentFrame - m_lastFrame;
+            m_lastFrame = currentFrame;
+
+            if (m_deltaTime > 0.02f) { 
+                m_deltaTime = 0.02f;
+            }
+
+            processInput();
+            update();
+            render();
+
+            glfwSwapBuffers(m_window);
+            glfwPollEvents();
         }
-
-        processInput();
-        update();
-        render();
-
-        glfwSwapBuffers(m_window);
-        glfwPollEvents();
     }
+}
+
+//debug prints here
+void Game::debug(){
+
 }
 
 void Game::cleanup() {

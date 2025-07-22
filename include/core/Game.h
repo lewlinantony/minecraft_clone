@@ -67,6 +67,9 @@ private:
         glm::vec3(0, 0, -0.05f)
     };
 
+    //Camera 
+    const float FOV = 45.0f;    
+
     // Collision constants
     const float m_collisionGap = 0.01f;
     const float m_collisionMargin = 0.5f;
@@ -78,8 +81,9 @@ private:
     std::queue<ChunkMeshResult> m_readyMeshes;
     std::mutex m_readyMeshesMutex; // Mutex to protect the queue
 
-
-
+    //first load state
+    std::atomic<int> m_initialChunksToLoad = 0;
+    bool firstLoad = true;
 
 
     // Core Methods
@@ -88,16 +92,19 @@ private:
     void render();
     void renderImGui();
 
+    //debug prints
+    void debug();
+
+
     // Logic Methods
     void updatePhysics();
     void performRaycasting();
     void generateTerrain();
-    void calculateChunk(glm::ivec3 chunkCoord);
     void calculateChunkAndNeighbors(glm::ivec3 block);
     std::vector<int> getVisibleFaces(glm::ivec3 block);
 
     void generateChunkData(glm::ivec3 chunkCoord);
-    void createChunkMesh(glm::ivec3 chunkCoord, bool forceUpdate = false);
+    void createChunkMesh(glm::ivec3 chunkCoord);
     void uploadReadyMeshes();    
 
     // Collision
@@ -117,6 +124,9 @@ private:
     void onMouseMovement(double xpos, double ypos);
     static void framebuffer_size_callback(GLFWwindow* window, int width, int height);
     static void mouse_callback_router(GLFWwindow* window, double xpos, double ypos);
+
+    // Loading Screen
+    void renderLoadingScreen();    
 
     // skybox Loading
     void loadCubemap(std::vector<std::string> faces);

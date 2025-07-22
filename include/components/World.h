@@ -19,7 +19,7 @@ struct World {
 
     // Configuration
     int Y_RENDER_DIST = 3;
-    int XZ_RENDER_DIST = 8;
+    int XZ_RENDER_DIST = 24;
     int Y_LOAD_DIST = Y_RENDER_DIST+1;
     int XZ_LOAD_DIST = XZ_RENDER_DIST+1;
 
@@ -34,6 +34,8 @@ struct World {
 
     // mutex for thread safety
     std::mutex chunkDataMutex;    
+
+
 
     // Methods
     Block* getBlock(glm::ivec3 blockPosition);
