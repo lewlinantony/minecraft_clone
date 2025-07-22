@@ -31,6 +31,7 @@ glm::ivec3 World::getChunkOrigin(glm::ivec3 blockPosition) {
     );
 }
 void World::setBlock(glm::ivec3 blockPosition, int type) {
+    
     glm::ivec3 chunkCoord = getChunkOrigin(blockPosition);
 
     // Lock the mutex to ensure thread safety when accessing chunk data

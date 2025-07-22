@@ -161,7 +161,7 @@ void Game::render() {
                 // Check if the chunk has a VAO and mesh data to render
                 if (m_world.chunkVaoMap.count(chunkOrigin) && m_world.chunkMeshData.count(chunkOrigin)) {
                     glBindVertexArray(m_world.chunkVaoMap.at(chunkOrigin));
-                    glDrawArrays(GL_TRIANGLES, 0, m_world.chunkMeshData.at(chunkOrigin).size() / 7);
+                    glDrawArrays(GL_TRIANGLES, 0, m_world.chunkMeshData.at(chunkOrigin).size() / 10);
                 }
             }
         }
@@ -627,19 +627,22 @@ void Game::calculateChunkAndNeighbors(glm::ivec3 block) {
     // If the block is on a boundary, remesh the neighbor chunk too
     if (blockOffset.x == 0) {
         remesh(chunkCoord + glm::ivec3(-CHUNK_SIZE, 0, 0));
-    } else if (blockOffset.x == CHUNK_SIZE - 1) {
+    } 
+    if (blockOffset.x == CHUNK_SIZE - 1) {
         remesh(chunkCoord + glm::ivec3(CHUNK_SIZE, 0, 0));
     }
     
     if (blockOffset.y == 0) {
         remesh(chunkCoord + glm::ivec3(0, -CHUNK_SIZE, 0));
-    } else if (blockOffset.y == CHUNK_SIZE - 1) {
+    } 
+    if (blockOffset.y == CHUNK_SIZE - 1) {
         remesh(chunkCoord + glm::ivec3(0, CHUNK_SIZE, 0));
     }
 
     if (blockOffset.z == 0) {
         remesh(chunkCoord + glm::ivec3(0, 0, -CHUNK_SIZE));
-    } else if (blockOffset.z == CHUNK_SIZE - 1) {
+    } 
+    if (blockOffset.z == CHUNK_SIZE - 1) {
         remesh(chunkCoord + glm::ivec3(0, 0, CHUNK_SIZE));
     }
 }
