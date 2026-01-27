@@ -13,7 +13,7 @@ find_package(OpenGL REQUIRED)
 find_package(glfw3 REQUIRED)
 
 # Source files
-set(SOURCE_FILES src/main.cpp)
+file(GLOB_RECURSE SOURCE_FILES "src/*.cpp") # Recursively find ALL .cpp files in src/ and subfolders
 
 # Create executable
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
@@ -57,8 +57,9 @@ target_link_libraries(imgui PUBLIC
 
 # Include directories
 target_include_directories(${PROJECT_NAME} PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/extern/glad/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/extern/glad/include #just for glad
     ${CMAKE_CURRENT_SOURCE_DIR}/extern
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 # Link libraries
