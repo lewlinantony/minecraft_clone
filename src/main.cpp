@@ -38,7 +38,6 @@ struct BoundingBox {
     }
 };
 
-
 // Hash function for glm::ivec3
 namespace std {
     template<>
@@ -193,7 +192,7 @@ struct Player {
     const float eyeHeight = 1.6f;
 
     // Physics Constants
-    const float gravity = 30.0f;
+    const float gravity = 30.0f; // prolly move to like a general constants or physics class?
     const float jumpVelocity = 9.0f;
 };
 
@@ -239,10 +238,12 @@ struct Block{
     int type = 0; // 0 for air
 };
 
+
 // CHUNK
 struct Chunk {
     Block blocks[CHUNK_SIZE][CHUNK_SIZE][CHUNK_SIZE];
 };
+
 
 // WORLD GEN AND STORING
 struct World {
@@ -273,18 +274,18 @@ struct World {
     glm::ivec3 getChunkOrigin(glm::ivec3 blockPosition);
 };
 
+
 Block* World::getBlock(glm::ivec3 blockPosition) {
     glm::ivec3 chunkCoord = getChunkOrigin(blockPosition);
-
 
     // Check if the chunk exists
     auto it = chunkMap.find(chunkCoord);
     if (it == chunkMap.end()) {
         return nullptr; // Chunk not found
     }
-
-    glm::ivec3 localPos = blockPosition - chunkCoord;
+    
     // Chunk exists, now get the block's local position
+    glm::ivec3 localPos = blockPosition - chunkCoord;
     if (localPos.x < 0 || localPos.x >= CHUNK_SIZE ||
         localPos.y < 0 || localPos.y >= CHUNK_SIZE ||
         localPos.z < 0 || localPos.z >= CHUNK_SIZE){ 
@@ -293,6 +294,7 @@ Block* World::getBlock(glm::ivec3 blockPosition) {
 
     return &it->second.blocks[localPos.x][localPos.y][localPos.z];
 }
+
 glm::ivec3 World::getChunkOrigin(glm::ivec3 blockPosition) {
     return glm::ivec3(
         floor(blockPosition.x / (float)CHUNK_SIZE) * CHUNK_SIZE,
@@ -300,8 +302,10 @@ glm::ivec3 World::getChunkOrigin(glm::ivec3 blockPosition) {
         floor(blockPosition.z / (float)CHUNK_SIZE) * CHUNK_SIZE
     );
 }
+
 void World::setBlock(glm::ivec3 blockPosition, int type) {
     glm::ivec3 chunkCoord = getChunkOrigin(blockPosition);
+
     // Find the chunk in the map. If it exists, modify it.
     auto it = chunkMap.find(chunkCoord);
     if (it != chunkMap.end()) {
@@ -332,7 +336,7 @@ private:
     GLFWwindow* m_window;
     float m_deltaTime = 0.0f;
     float m_lastFrame = 0.0f;
-    bool m_chunkChange = false;
+    bool m_chunkChange = false; // needs explanation
 
     // Shaders and Render Objects
     std::unique_ptr<Shader> m_chunkShader;       
@@ -392,21 +396,8 @@ private:
     static void mouse_callback_router(GLFWwindow* window, double xpos, double ypos);
 };
 
-
-int main() {
-    Game game;
-    std::cout<<"Constructor";
-    game.init();
-    std::cout<<"init";    
-    game.run();
-    std::cout<<"run";    
-    game.cleanup();
-    return 0;
-}
-
-
 void Game::processInput() {
-    // Window and Mouse Lock
+    // Close window
     if (glfwGetKey(m_window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
         glfwSetWindowShouldClose(m_window, true);
     }
@@ -491,8 +482,11 @@ void Game::processInput() {
     // Block Placement
     bool mouseRightIsPressed = glfwGetMouseButton(m_window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
     if (mouseRightIsPressed && !m_input.mouseRightWasPressed && m_previousBlock != glm::ivec3(INT_MAX)) {
-        m_world.setBlock(m_previousBlock, curBlockType); 
-        calculateChunkAndNeighbors(m_previousBlock);
+        Block* block = m_world.getBlock(m_previousBlock);
+        if(block && block->type == 0) { // Check if block is air
+            m_world.setBlock(m_previousBlock, curBlockType); 
+            calculateChunkAndNeighbors(m_previousBlock);
+        }
     }
     m_input.mouseRightWasPressed = mouseRightIsPressed;
 
@@ -607,7 +601,7 @@ void Game::renderImGui() {
     ImGui::Text("On Ground: %s", m_player.onGround ? "Yes" : "No");
     ImGui::Text("Velocity Y: %.2f", m_player.velocityY);
     ImGui::Checkbox("Creative Mode", &m_player.creativeMode);
-    ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+    ImGui::Text("FPS: %d", (int)std::round(ImGui::GetIO().Framerate));
     ImGui::End();
 
     // Render ImGui draw data
@@ -799,8 +793,8 @@ void Game::calculateChunk(glm::ivec3 chunkCoord) {
                 if (chunk.blocks[x][y][z].type == 0) continue; // Skip air blocks
 
                 glm::ivec3 blockPosition = chunkCoord + glm::ivec3(x, y, z);
-                
-                for (int faceID : getVisibleFaces(blockPosition)) {
+                std::vector<int> faces = getVisibleFaces(blockPosition);
+                for (int faceID : faces) {
                     const float* curFace = faceVertices[faceID];
                     if (!curFace) continue;
 
@@ -1091,7 +1085,7 @@ void Game::initShaders() {
     m_selectedBlockShader = std::make_unique<Shader>("shaders/selectedBlock/shader.vert", "shaders/selectedBlock/shader.frag");
     
     m_chunkShader->use();
-    m_chunkShader->setInt("text", 0);
+    m_chunkShader->setInt("text", 0); // "text" is the texture sampler uniform in the shader
 
     m_selectedBlockShader->use();
     m_selectedBlockShader->setInt("text", 0);
@@ -1143,7 +1137,6 @@ void Game::initRenderObjects() {
     glBindVertexArray(m_selectedBlockVao);
 
     glBindBuffer(GL_ARRAY_BUFFER, m_selectedBlockVbo);
-    // Note: This relies on s_cubeVertices being defined.
     glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);
 
     // Position attribute (stride of 6 floats)
@@ -1287,3 +1280,21 @@ void Game::cleanup() {
     glfwTerminate();
 }
 
+
+int main() {
+    Game game;
+    std::cout<<"Constructor";
+    game.init();
+    std::cout<<"init";    
+    game.run();
+    std::cout<<"run";    
+    game.cleanup();
+    return 0;
+}
+
+
+/*
+Some issues when breaking blocks at chunk boundaries i think
+refactor the collision detection stuff cleaner potentially into its own class
+optimize chunk meshing further maybe greedy meshing
+*/
