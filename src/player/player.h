@@ -8,7 +8,7 @@ struct Player {
     glm::vec3 position = glm::vec3(0.0f, 30.0f, 0.0f);
     float velocityY = 0.0f;
     bool onGround = false;
-    bool creativeMode = false;
+    bool creativeMode = true;
 
     // Properties
     const float width = 0.6f;
