@@ -77,8 +77,11 @@ void Game::processInput() {
     if (mouseLeftIsPressed && !m_input.mouseLeftWasPressed && m_selectedBlock != glm::ivec3(INT_MAX)) {
         Block* block = m_world.getBlock(m_selectedBlock);
         if(block && block->type != 0) { // Check if block exists and is not air
-            m_world.setBlock(m_selectedBlock, 0); // Set to air
-            m_world.calculateChunkAndNeighbors(m_selectedBlock, m_player.position);
+            // Prevent removing bedrock in survival mode
+            if (m_player.creativeMode || m_selectedBlock.y != -m_world.Y_LIMIT) {
+                m_world.setBlock(m_selectedBlock, 0); // Set to air
+                m_world.calculateChunkAndNeighbors(m_selectedBlock, m_player.position); // Recalculate meshes
+            }
         }
     }
     m_input.mouseLeftWasPressed = mouseLeftIsPressed;
@@ -106,12 +109,14 @@ void Game::processInput() {
 }
 
 void Game::update() {
+
+    // physics and chunk updation only for non-creative mode
     if (!m_player.creativeMode) {
         m_physics.updatePhysics(m_player, m_collision, m_world, m_deltaTime, m_playerMovedChunks);
-    }
-    if (m_playerMovedChunks) {
-        m_world.generateTerrain(m_player.position);
-        m_playerMovedChunks = false;
+        if (m_playerMovedChunks) {
+            m_world.generateTerrain(m_player.position);
+            m_playerMovedChunks = false;
+        }
     }
     // Update camera position to follow player's eyes
     m_camera.position = m_player.position + glm::vec3(0.0f, m_player.eyeHeight, 0.0f);

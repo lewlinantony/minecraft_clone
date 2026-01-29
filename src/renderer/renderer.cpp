@@ -136,9 +136,10 @@ glClearColor(0.529f, 0.808f, 0.922f, 1.0f);
     // Bind texture atlas (dosent have to be done every frame ideally but the performance impact is negligible)
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, textureAtlas);
-
+    
     // Iterate through chunks within render distance of the player
     glm::ivec3 playerChunk = world.getChunkOrigin(glm::round(player.position));
+
     for (int cx = -world.XZ_RENDER_DIST; cx <= world.XZ_RENDER_DIST; cx++) {
         for (int cy = -world.Y_RENDER_DIST; cy <= world.Y_RENDER_DIST; cy++) {
             for (int cz = -world.XZ_RENDER_DIST; cz <= world.XZ_RENDER_DIST; cz++) {
@@ -159,7 +160,7 @@ glClearColor(0.529f, 0.808f, 0.922f, 1.0f);
     }
     
     // --- Render Selected Block Highlight ---
-    if (selectedBlock != glm::ivec3(INT_MAX)){
+    if (selectedBlock != glm::ivec3(INT_MAX) && !player.creativeMode){
         selectedBlockShader->use();
         Block* block = world.getBlock(selectedBlock);
         if (block) { // Ensure block exists before trying to render it

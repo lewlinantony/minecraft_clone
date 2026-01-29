@@ -78,7 +78,7 @@ void World::generateTerrain(glm::vec3 playerPosition) {
                                 currentChunk.blocks[x][y][z].type = 1; // Grass
                             } else if (globalY >= height - 5) {
                                 currentChunk.blocks[x][y][z].type = 2; // Dirt
-                            } else if (globalY >= -40) {
+                            } else if (globalY >= -Y_LIMIT) {
                                 currentChunk.blocks[x][y][z].type = 3; // Stone
                             }
                         }
@@ -220,7 +220,7 @@ std::vector<int> World::getVisibleFaces(glm::ivec3 block, glm::vec3 playerPositi
         //     continue;
         // }
 
-        if (neighborBlock == nullptr || neighborBlock->type == 0) {// If chunk doesn't exist or block is air
+        if (neighborBlock && neighborBlock->type == 0) {// If chunk doesn't exist or block is air
             visibleFaces.push_back(i);
         }
     }

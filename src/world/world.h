@@ -38,7 +38,8 @@ class World {
         int Y_RENDER_DIST = 3;
         int XZ_RENDER_DIST = 10;
         int Y_LOAD_DIST = Y_RENDER_DIST+1;
-        int XZ_LOAD_DIST = XZ_RENDER_DIST+1;        
+        int XZ_LOAD_DIST = XZ_RENDER_DIST+1;     
+        int Y_LIMIT = 4 * CHUNK_SIZE; // Vertical world limit   
         
         // Lifecycle
         void init(glm::vec3& playerPosition);
