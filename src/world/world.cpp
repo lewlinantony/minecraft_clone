@@ -91,6 +91,20 @@ void World::generateTerrain(glm::vec3 playerPosition) {
     // After generating block data, create the meshes for the new chunks
     for (const auto& chunkCoord : newChunksToMesh) {
         calculateChunk(chunkCoord, playerPosition);
+        
+        glm::ivec3 neighbors[4] = {
+            chunkCoord + glm::ivec3(CHUNK_SIZE, 0, 0),  // East
+            chunkCoord + glm::ivec3(-CHUNK_SIZE, 0, 0), // West
+            chunkCoord + glm::ivec3(0, 0, CHUNK_SIZE),  // South
+            chunkCoord + glm::ivec3(0, 0, -CHUNK_SIZE)  // North
+        };
+
+        for (const auto& neighborPos : neighbors) {
+            // Only update if the neighbor actually exists!
+            if (chunkMap.find(neighborPos) != chunkMap.end()) {
+                calculateChunk(neighborPos, playerPosition);
+            }
+        }        
     }
 }
 
@@ -215,14 +229,14 @@ std::vector<int> World::getVisibleFaces(glm::ivec3 block, glm::vec3 playerPositi
         glm::ivec3 neighborPos = block + directions[i];
         Block* neighborBlock = getBlock(neighborPos);
 
-        // to be reviewed
-        // if ((i == 5 && neighborPos.y < playerPosition.y)) {     // Bottom
-        //     continue;
-        // }
-
-        if (neighborBlock && neighborBlock->type == 0) {// If chunk doesn't exist or block is air
+        // never render faces beyond the vertical world limits cause the player can't see them
+        if (i==5 && neighborPos.y <= -Y_LIMIT && playerPosition.y >= neighborPos.y) {
+            continue;
+        }
+        else if (neighborBlock && neighborBlock->type == 0) {// If chunk doesn't exist or block is air
             visibleFaces.push_back(i);
         }
+
     }
     return visibleFaces;
 }
