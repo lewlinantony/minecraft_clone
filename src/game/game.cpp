@@ -97,6 +97,14 @@ void Game::processInput() {
     }
     m_input.mouseRightWasPressed = mouseRightIsPressed;
 
+    // Toggle world generation
+    bool pIsPressed = glfwGetKey(m_window, GLFW_KEY_P) == GLFW_PRESS;
+    if (m_player.creativeMode && pIsPressed && !m_input.pWasPressed) {
+        generateWorld = !generateWorld;
+    }
+    m_input.pWasPressed = pIsPressed;
+
+
     if (glfwGetKey(m_window, GLFW_KEY_1) == GLFW_PRESS) {
         m_curBlockType = 1;
     }
@@ -113,10 +121,10 @@ void Game::update() {
     // physics and chunk updation only for non-creative mode
     if (!m_player.creativeMode) {
         m_physics.updatePhysics(m_player, m_collision, m_world, m_deltaTime, m_playerMovedChunks);
-        if (m_playerMovedChunks) {
-            m_world.generateTerrain(m_player.position);
-            m_playerMovedChunks = false;
-        }
+    }
+    if (m_playerMovedChunks && generateWorld) {
+        m_world.generateTerrain(m_player.position);
+        m_playerMovedChunks = false;
     }
     // Update camera position to follow player's eyes
     m_camera.position = m_player.position + glm::vec3(0.0f, m_player.eyeHeight, 0.0f);

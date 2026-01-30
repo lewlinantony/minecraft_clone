@@ -38,7 +38,11 @@ private:
     GLFWwindow* m_window = nullptr;
     float m_deltaTime = 0.0f;
     float m_lastFrame = 0.0f;
+
+
+
     bool m_playerMovedChunks = false; 
+    bool generateWorld = true;
 
     // Raycasting State (as per your request)
     glm::ivec3 m_selectedBlock = glm::ivec3(INT_MAX);

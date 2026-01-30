@@ -15,4 +15,5 @@ struct InputManager {
     bool tabWasPressed = false;
     bool mouseLeftWasPressed = false;
     bool mouseRightWasPressed = false;
+    bool pWasPressed = false;    
 };
