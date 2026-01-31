@@ -1,6 +1,6 @@
 #include <world/world.h>
 #include <player/player.h>
-
+#include <iostream>
 
 Block* World::getBlock(glm::ivec3 blockPosition) {
     glm::ivec3 chunkCoord = getChunkOrigin(blockPosition);
@@ -88,54 +88,80 @@ void World::generateTerrain(glm::vec3 playerPosition) {
         }
     }
 
-    // After generating block data, create the meshes for the new chunks
     for (const auto& chunkCoord : newChunksToMesh) {
-        calculateChunk(chunkCoord, playerPosition);
-        
-        glm::ivec3 neighbors[4] = {
-            chunkCoord + glm::ivec3(CHUNK_SIZE, 0, 0),  // East
-            chunkCoord + glm::ivec3(-CHUNK_SIZE, 0, 0), // West
-            chunkCoord + glm::ivec3(0, 0, CHUNK_SIZE),  // South
-            chunkCoord + glm::ivec3(0, 0, -CHUNK_SIZE)  // North
-        };
-
-        for (const auto& neighborPos : neighbors) {
-            // Only update if the neighbor actually exists!
-            if (chunkMap.find(neighborPos) != chunkMap.end()) {
-                calculateChunk(neighborPos, playerPosition);
-            }
-        }        
+        // Add to vector to calculate mesh later
+        chunksToLoad.push_back(chunkCoord);
     }
 }
 
-void World::calculateChunkAndNeighbors(glm::ivec3 block, glm::vec3 playerPosition) {
+void World::unloadChunks(glm::vec3 playerPosition) {
+    auto startTime = std::chrono::high_resolution_clock::now();
+    double duration = 0.0;
+
+    // Sort chunksToLoad based on distance from player (farthest first to pop the nearest first)
+    sort(chunksToLoad.begin(), chunksToLoad.end(), [&](const glm::ivec3& a, const glm::ivec3& b) {
+        glm::ivec3 playerChunkOrigin = getChunkOrigin(glm::round(playerPosition));
+        float distA = glm::length(glm::vec3(a - playerChunkOrigin));
+        float distB = glm::length(glm::vec3(b - playerChunkOrigin));
+        return distA > distB;
+    });
+
+
+    while(duration<processDuration) { // Limit to processDuration milliseconds per frame
+        if (!chunksToLoad.empty()) {
+            glm::ivec3 chunkCoord = chunksToLoad.back();
+            calculateChunk(chunkCoord);
+            
+            glm::ivec3 neighbors[4] = {
+                chunkCoord + glm::ivec3(CHUNK_SIZE, 0, 0),  // East
+                chunkCoord + glm::ivec3(-CHUNK_SIZE, 0, 0), // West
+                chunkCoord + glm::ivec3(0, 0, CHUNK_SIZE),  // South
+                chunkCoord + glm::ivec3(0, 0, -CHUNK_SIZE)  // North
+            };
+
+            for (const auto& neighborPos : neighbors) {
+                // Only update if the neighbor actually exists!
+                if (chunkMap.find(neighborPos) != chunkMap.end()) {
+                    calculateChunk(neighborPos);
+                }
+            }        
+            chunksToLoad.pop_back();
+        } else {
+            break;
+        }
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        duration = std::chrono::duration<double, std::milli>(currentTime - startTime).count();        
+    }
+}
+
+void World::calculateChunkAndNeighbors(glm::ivec3 block) {
     glm::ivec3 chunkCoord = getChunkOrigin(block);
     glm::ivec3 blockOffset = block - chunkCoord;
 
     // Always recalculate the mesh for the chunk the block is in
-    calculateChunk(chunkCoord, playerPosition);
+    calculateChunk(chunkCoord);
 
     // If the block is on a boundary, the neighbor chunk's mesh is also affected
     if (blockOffset.x == 0) {
-        calculateChunk(chunkCoord + glm::ivec3(-CHUNK_SIZE, 0, 0), playerPosition);
+        calculateChunk(chunkCoord + glm::ivec3(-CHUNK_SIZE, 0, 0));
     } else if (blockOffset.x == CHUNK_SIZE - 1) {
-        calculateChunk(chunkCoord + glm::ivec3(CHUNK_SIZE, 0, 0), playerPosition);
+        calculateChunk(chunkCoord + glm::ivec3(CHUNK_SIZE, 0, 0));
     }
     
     if (blockOffset.y == 0) {
-        calculateChunk(chunkCoord + glm::ivec3(0, -CHUNK_SIZE, 0), playerPosition);
+        calculateChunk(chunkCoord + glm::ivec3(0, -CHUNK_SIZE, 0));
     } else if (blockOffset.y == CHUNK_SIZE - 1) {
-        calculateChunk(chunkCoord + glm::ivec3(0, CHUNK_SIZE, 0), playerPosition);
+        calculateChunk(chunkCoord + glm::ivec3(0, CHUNK_SIZE, 0));
     }
 
     if (blockOffset.z == 0) {
-        calculateChunk(chunkCoord + glm::ivec3(0, 0, -CHUNK_SIZE), playerPosition);
+        calculateChunk(chunkCoord + glm::ivec3(0, 0, -CHUNK_SIZE));
     } else if (blockOffset.z == CHUNK_SIZE - 1) {
-        calculateChunk(chunkCoord + glm::ivec3(0, 0, CHUNK_SIZE), playerPosition);
+        calculateChunk(chunkCoord + glm::ivec3(0, 0, CHUNK_SIZE));
     }
 }
 
-void World::calculateChunk(glm::ivec3 chunkCoord, glm::vec3 playerPosition) {
+void World::calculateChunk(glm::ivec3 chunkCoord) {
     // Clear any previous mesh data for this chunk
     chunkMeshData[chunkCoord].clear();
     
@@ -160,7 +186,7 @@ void World::calculateChunk(glm::ivec3 chunkCoord, glm::vec3 playerPosition) {
                 if (chunk.blocks[x][y][z].type == 0) continue; // Skip air blocks
 
                 glm::ivec3 blockPosition = chunkCoord + glm::ivec3(x, y, z);
-                std::vector<int> faces = getVisibleFaces(blockPosition, playerPosition);
+                std::vector<int> faces = getVisibleFaces(blockPosition);
                 for (int faceID : faces) {
                     const float* curFace = faceVertices[faceID];
                     if (!curFace) continue;
@@ -213,7 +239,7 @@ void World::calculateChunk(glm::ivec3 chunkCoord, glm::vec3 playerPosition) {
     }
 }
 
-std::vector<int> World::getVisibleFaces(glm::ivec3 block, glm::vec3 playerPosition) {
+std::vector<int> World::getVisibleFaces(glm::ivec3 block) {
     std::vector<int> visibleFaces;
     // Directions corresponding to face IDs 0 through 5
     const glm::ivec3 directions[6] = {
@@ -230,7 +256,7 @@ std::vector<int> World::getVisibleFaces(glm::ivec3 block, glm::vec3 playerPositi
         Block* neighborBlock = getBlock(neighborPos);
 
         // never render faces beyond the vertical world limits cause the player can't see them
-        if (i==5 && neighborPos.y <= -Y_LIMIT && playerPosition.y >= neighborPos.y) {
+        if (i==5 && neighborPos.y <= -Y_LIMIT) {
             continue;
         }
         else if (neighborBlock && neighborBlock->type == 0) {// If chunk doesn't exist or block is air

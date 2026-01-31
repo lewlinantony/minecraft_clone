@@ -80,7 +80,7 @@ void Game::processInput() {
             // Prevent removing bedrock in survival mode
             if (m_player.creativeMode || m_selectedBlock.y != -m_world.Y_LIMIT) {
                 m_world.setBlock(m_selectedBlock, 0); // Set to air
-                m_world.calculateChunkAndNeighbors(m_selectedBlock, m_player.position); // Recalculate meshes
+                m_world.calculateChunkAndNeighbors(m_selectedBlock); // Recalculate meshes
             }
         }
     }
@@ -92,7 +92,7 @@ void Game::processInput() {
         Block* block = m_world.getBlock(m_previousBlock);
         if(block && block->type == 0) { // Check if block is air
             m_world.setBlock(m_previousBlock, m_curBlockType); 
-            m_world.calculateChunkAndNeighbors(m_previousBlock, m_player.position);
+            m_world.calculateChunkAndNeighbors(m_previousBlock);
         }
     }
     m_input.mouseRightWasPressed = mouseRightIsPressed;
@@ -103,6 +103,19 @@ void Game::processInput() {
         generateWorld = !generateWorld;
     }
     m_input.pWasPressed = pIsPressed;
+
+
+    // Toggle wireframe mode
+    bool rIsPressed = glfwGetKey(m_window, GLFW_KEY_R) == GLFW_PRESS;
+    if (rIsPressed && !m_input.rWasPressed) {
+        m_wireframe = !m_wireframe;
+        if (m_wireframe) {
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        } else {
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        }
+    }
+    m_input.rWasPressed = rIsPressed;
 
 
     if (glfwGetKey(m_window, GLFW_KEY_1) == GLFW_PRESS) {
@@ -129,6 +142,13 @@ void Game::update() {
     // Update camera position to follow player's eyes
     m_camera.position = m_player.position + glm::vec3(0.0f, m_player.eyeHeight, 0.0f);
     performRaycasting();
+
+    // Unload stored chunks each frame
+    m_world.unloadChunks(m_player.position);
+}
+
+void Game::render() {
+    m_renderer.render(m_selectedBlock, m_camera, m_player, m_world, m_window);
 }
 
 void Game::performRaycasting() {
@@ -293,9 +313,7 @@ void Game::run() {
     // Enable OpenGL features
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);       
     
     // The main game loop
     while (!glfwWindowShouldClose(m_window)) {
@@ -310,7 +328,7 @@ void Game::run() {
 
         processInput();
         update();
-        m_renderer.render(m_selectedBlock, m_camera, m_player, m_world, m_window);
+        render();
 
         glfwSwapBuffers(m_window);
         glfwPollEvents();

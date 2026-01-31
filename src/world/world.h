@@ -8,6 +8,8 @@
 #include <core/constants.h>
 #include <core/utils.h>
 #include <renderer/renderer.h>
+#include <queue>
+#include <chrono>
 
 // Forward declaration
 class Player; 
@@ -32,11 +34,12 @@ class World {
         // Mesh Data
         std::unordered_map<glm::ivec3, std::vector<float>> chunkMeshData;
         std::unordered_map<glm::ivec3, GLuint> chunkVboMap;
-        std::unordered_map<glm::ivec3, GLuint> chunkVaoMap;          
+        std::unordered_map<glm::ivec3, GLuint> chunkVaoMap;   
+        std::vector<glm::ivec3> chunksToLoad; 
 
         // Render and Load Distances
-        int Y_RENDER_DIST = 3;
-        int XZ_RENDER_DIST = 10;
+        int Y_RENDER_DIST = 2;
+        int XZ_RENDER_DIST = 15;
         int Y_LOAD_DIST = Y_RENDER_DIST+1;
         int XZ_LOAD_DIST = XZ_RENDER_DIST+1;     
         int Y_LIMIT = 4 * CHUNK_SIZE; // Vertical world limit   
@@ -52,8 +55,10 @@ class World {
 
         // Terrain Generation
         void generateTerrain(glm::vec3 playerPosition);        
-        void calculateChunkAndNeighbors(glm::ivec3 block, glm::vec3 playerPosition);
+        void calculateChunkAndNeighbors(glm::ivec3 block);
+        void calculateChunk(glm::ivec3 chunkCoord);
         
+        void unloadChunks(glm::vec3 playerPosition);
         
     private:        
         // World Data
@@ -68,9 +73,10 @@ class World {
         float amplitude         = 10.0f;
         int   g_NoiseSeed       = 133;
 
+        double processDuration = 10.0;
+
         // Helpers
-        void calculateChunk(glm::ivec3 chunkCoord, glm::vec3 playerPosition);
-        std::vector<int> getVisibleFaces(glm::ivec3 block, glm::vec3 playerPosition);
+        std::vector<int> getVisibleFaces(glm::ivec3 block);
     };
     
     

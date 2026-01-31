@@ -110,8 +110,8 @@ void Renderer::initImGui(GLFWwindow* window) {
 }
 
 void Renderer::render(glm::ivec3 selectedBlock, Camera& camera, Player& player, World& world, GLFWwindow* window) {
-// Clear screen
-glClearColor(0.529f, 0.808f, 0.922f, 1.0f);
+    // Clear screen
+    glClearColor(0.39f, 0.58f, 0.93f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Get current window size
