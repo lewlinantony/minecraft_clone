@@ -2,13 +2,14 @@
 
 #include <shader/shader.h>
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <stb/stb_image.h>
 #include <imgui/imgui.h>
 #include <imgui/imgui_impl_glfw.h>
 #include <imgui/imgui_impl_opengl3.h>
 #include <core/constants.h>
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
+#include <renderer/frustum.h>
 
 // Forward Declarations
 struct Player;
@@ -21,6 +22,10 @@ class Renderer {
         // Shaders and Render Objects
         std::unique_ptr<Shader> chunkShader;       
         std::unique_ptr<Shader> selectedBlockShader; 
+
+        // frustum culling stats
+        int totalVisibleChunks = 0;
+        int inFrustumChunks = 0;        
 
         // Render Functions
         void render(glm::ivec3 selectedBlock, Camera& camera, Player& player, World& world, GLFWwindow* window); 

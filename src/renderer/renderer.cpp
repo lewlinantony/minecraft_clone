@@ -2,6 +2,7 @@
 #include <world/world.h>
 #include <core/camera.h>
 #include <player/player.h>
+#include <iostream>
 
 
 void Renderer::initShaders() {
@@ -121,6 +122,11 @@ void Renderer::render(glm::ivec3 selectedBlock, Camera& camera, Player& player, 
     // Create view and projection matrices
     glm::mat4 view = camera.getViewMatrix();
     glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)curWidth / (float)curHeight, 0.1f, 5000.0f);
+    
+
+    // Update frustum each frame
+    Frustum frustum;
+    frustum.update(projection * view);
 
     // --- Render World Chunks ---
     chunkShader->use();
@@ -140,20 +146,34 @@ void Renderer::render(glm::ivec3 selectedBlock, Camera& camera, Player& player, 
     // Iterate through chunks within render distance of the player
     glm::ivec3 playerChunk = world.getChunkOrigin(glm::round(player.position));
 
+    totalVisibleChunks = 0;
+    inFrustumChunks = 0;
     for (int cx = -world.XZ_RENDER_DIST; cx <= world.XZ_RENDER_DIST; cx++) {
         for (int cy = -world.Y_RENDER_DIST; cy <= world.Y_RENDER_DIST; cy++) {
             for (int cz = -world.XZ_RENDER_DIST; cz <= world.XZ_RENDER_DIST; cz++) {
+
                 // Cylindrical render distance check
                 if (cx * cx + cz * cz > world.XZ_RENDER_DIST * world.XZ_RENDER_DIST) {
                     continue;
                 }
+                totalVisibleChunks++;
                 
                 glm::ivec3 chunkOrigin = playerChunk + glm::ivec3(cx, cy, cz) * CHUNK_SIZE;
 
+                // Define chunk Bounding Box
+                glm::vec3 min = glm::vec3(chunkOrigin);
+                glm::vec3 max = min + glm::vec3(CHUNK_SIZE);    
+                
+                // Frustum culling
+                if (!frustum.isBoxVisible(min, max)) {
+                    continue; // Skip
+                }                
+                
                 // Check if the chunk has a VAO and mesh data to render
                 if (world.chunkVaoMap.count(chunkOrigin) && world.chunkMeshData.count(chunkOrigin)) {
                     glBindVertexArray(world.chunkVaoMap.at(chunkOrigin));
                     glDrawArrays(GL_TRIANGLES, 0, world.chunkMeshData.at(chunkOrigin).size() / 10);
+                    inFrustumChunks++;
                 }
             }
         }
@@ -190,14 +210,14 @@ void Renderer::renderImGui(Player& player, World& world) {
     ImGui::NewFrame();
 
     // Create a simple window
-    ImGui::Begin("Player Info");
+    ImGui::Begin("Info");
     ImGui::Text("Position: %.2f, %.2f, %.2f", player.position.x, player.position.y, player.position.z);
     glm::ivec3 pChunk = world.getChunkOrigin(glm::round(player.position));
     ImGui::Text("Chunk: %d, %d, %d", pChunk.x, pChunk.y, pChunk.z);
-    ImGui::Text("On Ground: %s", player.onGround ? "Yes" : "No");
-    ImGui::Text("Velocity Y: %.2f", player.velocityY);
     ImGui::Checkbox("Creative Mode", &player.creativeMode);
     ImGui::Text("FPS: %d", (int)std::round(ImGui::GetIO().Framerate));
+    ImGui::Text("Total Chunks : %d", totalVisibleChunks);
+    ImGui::Text("Chunks in Frustum: %d", inFrustumChunks);
     ImGui::End();
 
     // Render ImGui draw data
