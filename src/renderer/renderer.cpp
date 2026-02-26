@@ -149,17 +149,24 @@ void Renderer::render(glm::ivec3 selectedBlock, Camera& camera, Player& player, 
 
     totalVisibleChunks = 0;
     inFrustumChunks = 0;
+    
     for (int cx = -world.XZ_RENDER_DIST; cx <= world.XZ_RENDER_DIST; cx++) {
-        for (int cy = -world.Y_RENDER_DIST; cy <= world.Y_RENDER_DIST; cy++) {
-            for (int cz = -world.XZ_RENDER_DIST; cz <= world.XZ_RENDER_DIST; cz++) {
+        for (int cz = -world.XZ_RENDER_DIST; cz <= world.XZ_RENDER_DIST; cz++) {
+            
+            // Cylindrical render distance check
+            if (cx * cx + cz * cz > world.XZ_RENDER_DIST * world.XZ_RENDER_DIST) {
+                continue;
+            }
 
-                // Cylindrical render distance check
-                if (cx * cx + cz * cz > world.XZ_RENDER_DIST * world.XZ_RENDER_DIST) {
-                    continue;
-                }
+            for (int y = -world.Y_LIMIT; y <= world.Y_LIMIT; y++) {
                 totalVisibleChunks++;
                 
-                glm::ivec3 chunkOrigin = playerChunk + glm::ivec3(cx, cy, cz) * CHUNK_SIZE;
+                //decoupling Y to iterate from Y_LIMIT to -Y_LIMIT cause worlds vertical bounds is fixed and is independent of the players position
+                glm::ivec3 chunkOrigin = glm::ivec3(
+                    playerChunk.x + (cx * CHUNK_SIZE),
+                    y * CHUNK_SIZE, 
+                    playerChunk.z + (cz * CHUNK_SIZE)
+                );
 
                 // Define chunk Bounding Box
                 glm::vec3 min = glm::vec3(chunkOrigin);
@@ -212,8 +219,6 @@ void Renderer::renderImGui(Player& player, World& world, float* updateTimes, flo
 
     // Performance
     ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
-    ImGui::SameLine(); 
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "(%.3f ms/frame)", 1000.0f / ImGui::GetIO().Framerate);
 
     // Player State 
     ImGui::SeparatorText("Player");

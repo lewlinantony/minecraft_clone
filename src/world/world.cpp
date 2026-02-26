@@ -46,14 +46,27 @@ void World::generateTerrain(glm::vec3 playerPosition) {
     glm::ivec3 playerChunkOrigin = getChunkOrigin(glm::round(playerPosition));
 
     for (int cx = -XZ_LOAD_DIST; cx <= XZ_LOAD_DIST; cx++) {
-        for (int cy = -Y_LOAD_DIST; cy <= Y_LOAD_DIST; cy++) {
-            for (int cz = -XZ_LOAD_DIST; cz <= XZ_LOAD_DIST; cz++) {
-                // Use cylindrical distance
-                if (cx * cx + cz * cz > XZ_LOAD_DIST * XZ_LOAD_DIST) {
-                    continue;
-                }
+        for (int cz = -XZ_LOAD_DIST; cz <= XZ_LOAD_DIST; cz++) {
+
+            // Use cylindrical distance
+            if (cx * cx + cz * cz > XZ_LOAD_DIST * XZ_LOAD_DIST) {
+                continue;
+            }
+            
+            for (int y = -Y_LOAD_DIST; y <= Y_LOAD_DIST; y++) {
                 
-                glm::ivec3 chunkOrigin = playerChunkOrigin + glm::ivec3(cx, cy, cz) * CHUNK_SIZE;
+                //decoupling Y to iterate from Y_LIMIT to -Y_LIMIT cause worlds vertical bounds is fixed and is independent of the players position
+                glm::ivec3 chunkOrigin = glm::ivec3(
+                    playerChunkOrigin.x + (cx * CHUNK_SIZE),
+                    y * CHUNK_SIZE, 
+                    playerChunkOrigin.z + (cz * CHUNK_SIZE)
+                );
+                
+                if(chunkOrigin.y < -(Y_LIMIT*CHUNK_SIZE) || chunkOrigin.y > Y_LIMIT*CHUNK_SIZE) {
+                    continue; // Skip chunks beyond vertical world limits
+                }
+
+
                 // If chunk data already exists, skip it
                 if (chunkMap.count(chunkOrigin)) {
                     continue;
@@ -78,7 +91,7 @@ void World::generateTerrain(glm::vec3 playerPosition) {
                                 currentChunk.blocks[x][y][z].type = 1; // Grass
                             } else if (globalY >= height - 5) {
                                 currentChunk.blocks[x][y][z].type = 2; // Dirt
-                            } else if (globalY >= -Y_LIMIT) {
+                            } else if (globalY >= -(Y_LIMIT*CHUNK_SIZE)) {
                                 currentChunk.blocks[x][y][z].type = 3; // Stone
                             }
                         }
@@ -255,11 +268,12 @@ std::vector<int> World::getVisibleFaces(glm::ivec3 block) {
         glm::ivec3 neighborPos = block + directions[i];
         Block* neighborBlock = getBlock(neighborPos);
 
-        // never render faces beyond the vertical world limits cause the player can't see them
-        if (i==5 && neighborPos.y <= -Y_LIMIT) {
+        // never render faces at and beyond the vertical world limits cause the player can't see them
+        if (i==5 && neighborPos.y <= -(Y_LIMIT*CHUNK_SIZE)) {
             continue;
         }
-        else if (neighborBlock && neighborBlock->type == 0) {// If chunk doesn't exist or block is air
+     
+        else if (!neighborBlock || neighborBlock->type == 0) {// If chunk doesn't exist or block is air
             visibleFaces.push_back(i);
         }
 
