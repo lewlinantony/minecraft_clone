@@ -38,6 +38,10 @@ private:
     GLFWwindow* m_window = nullptr;
     float m_deltaTime = 0.0f;
     float m_lastFrame = 0.0f;
+
+    float m_updateTimes[100] = {0};
+    float m_renderTimes[100] = {0};
+    int m_timeIndex = 0;    
     
     bool m_playerMovedChunks = false; 
     bool generateWorld = true;

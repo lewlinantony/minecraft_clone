@@ -29,6 +29,7 @@ class Renderer {
 
         // Render Functions
         void render(glm::ivec3 selectedBlock, Camera& camera, Player& player, World& world, GLFWwindow* window); 
+        void renderImGui(Player& player, World& world, float* updateTimes, float* renderTimes, int timeIndex);         
         
         // Lifecycle
         void init(GLFWwindow* window);
@@ -46,7 +47,4 @@ class Renderer {
         void initShaders();
         void initTextures();
         void initImGui(GLFWwindow* window);       
-        
-        // ImGui Rendering
-        void renderImGui(Player& player, World& world); // maybe move to Renderer class? 
 };

@@ -5,6 +5,7 @@
 #include <iostream>
 
 
+
 void Renderer::initShaders() {
     chunkShader = std::make_unique<Shader>("shaders/world/shader.vert", "shaders/world/shader.frag");
     selectedBlockShader = std::make_unique<Shader>("shaders/selectedBlock/shader.vert", "shaders/selectedBlock/shader.frag");
@@ -198,26 +199,48 @@ void Renderer::render(glm::ivec3 selectedBlock, Camera& camera, Player& player, 
             glDrawArrays(GL_TRIANGLES, 0, 36); // A cube has 36 vertices
         }
     }
-    
-    // Render the ImGui overlay
-    renderImGui(player, world);
 }
 
-void Renderer::renderImGui(Player& player, World& world) {
+void Renderer::renderImGui(Player& player, World& world, float* updateTimes, float* renderTimes, int timeIndex) {
     // Start the Dear ImGui frame
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
     // Create a simple window
-    ImGui::Begin("Info");
-    ImGui::Text("Position: %.2f, %.2f, %.2f", player.position.x, player.position.y, player.position.z);
+    ImGui::Begin("Debug Info");
+
+    // Performance
+    ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+    ImGui::SameLine(); 
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "(%.3f ms/frame)", 1000.0f / ImGui::GetIO().Framerate);
+
+    // Player State 
+    ImGui::SeparatorText("Player");
+    ImGui::Text("  Pos:   X:%.1f Y:%.1f Z:%.1f", player.position.x, player.position.y, player.position.z);
+    
     glm::ivec3 pChunk = world.getChunkOrigin(glm::round(player.position));
-    ImGui::Text("Chunk: %d, %d, %d", pChunk.x, pChunk.y, pChunk.z);
+    // Formatting the chunk coord to look like a vector
+    ImGui::Text("  Chunk: [%d, %d, %d]", pChunk.x, pChunk.y, pChunk.z); 
+    
+    ImGui::Spacing();
     ImGui::Checkbox("Creative Mode", &player.creativeMode);
-    ImGui::Text("FPS: %d", (int)std::round(ImGui::GetIO().Framerate));
-    ImGui::Text("Total Chunks : %d", totalVisibleChunks);
-    ImGui::Text("Chunks in Frustum: %d", inFrustumChunks);
+
+
+    // Renderer Stats 
+    ImGui::Spacing();
+    ImGui::SeparatorText("Renderer");
+    ImGui::Text("  Chunks: %d / %d", inFrustumChunks, totalVisibleChunks); // "Active / Total" format is cleaner
+    ImGui::Text("  Culled: %d", totalVisibleChunks - inFrustumChunks);
+
+    // Profiling Graphs 
+    ImGui::Spacing();
+    ImGui::SeparatorText("Profiling"); // specific ImGui widget for headers
+    // Make graphs slightly shorter (height=60) to save screen space
+    ImGui::PlotLines("Update", updateTimes, 100, timeIndex, nullptr, 0.0f, 20.0f, ImVec2(300, 50));
+
+    ImGui::PlotLines("Render", renderTimes, 100, timeIndex, nullptr, 0.0f, 20.0f, ImVec2(300, 50)); 
+    
     ImGui::End();
 
     // Render ImGui draw data
