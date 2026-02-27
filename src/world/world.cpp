@@ -123,7 +123,7 @@ void World::unloadChunks(glm::vec3 playerPosition) {
     while(duration<processDuration) { // Limit to processDuration milliseconds per frame
         if (!chunksToLoad.empty()) {
             glm::ivec3 chunkCoord = chunksToLoad.back();
-            calculateChunk(chunkCoord);
+            calculateChunkMesh(chunkCoord);
             
             glm::ivec3 neighbors[4] = {
                 chunkCoord + glm::ivec3(CHUNK_SIZE, 0, 0),  // East
@@ -135,7 +135,7 @@ void World::unloadChunks(glm::vec3 playerPosition) {
             for (const auto& neighborPos : neighbors) {
                 // Only update if the neighbor actually exists!
                 if (chunkMap.find(neighborPos) != chunkMap.end()) {
-                    calculateChunk(neighborPos);
+                    calculateChunkMesh(neighborPos);
                 }
             }        
             chunksToLoad.pop_back();
@@ -147,41 +147,40 @@ void World::unloadChunks(glm::vec3 playerPosition) {
     }
 }
 
-void World::calculateChunkAndNeighbors(glm::ivec3 block) {
+void World::calculateChunkAndNeighborsMesh(glm::ivec3 block) {
     glm::ivec3 chunkCoord = getChunkOrigin(block);
     glm::ivec3 blockOffset = block - chunkCoord;
 
     // Always recalculate the mesh for the chunk the block is in
-    calculateChunk(chunkCoord);
+    calculateChunkMesh(chunkCoord);
 
     // If the block is on a boundary, the neighbor chunk's mesh is also affected
     if (blockOffset.x == 0) {
-        calculateChunk(chunkCoord + glm::ivec3(-CHUNK_SIZE, 0, 0));
+        calculateChunkMesh(chunkCoord + glm::ivec3(-CHUNK_SIZE, 0, 0));
     } else if (blockOffset.x == CHUNK_SIZE - 1) {
-        calculateChunk(chunkCoord + glm::ivec3(CHUNK_SIZE, 0, 0));
+        calculateChunkMesh(chunkCoord + glm::ivec3(CHUNK_SIZE, 0, 0));
     }
     
     if (blockOffset.y == 0) {
-        calculateChunk(chunkCoord + glm::ivec3(0, -CHUNK_SIZE, 0));
+        calculateChunkMesh(chunkCoord + glm::ivec3(0, -CHUNK_SIZE, 0));
     } else if (blockOffset.y == CHUNK_SIZE - 1) {
-        calculateChunk(chunkCoord + glm::ivec3(0, CHUNK_SIZE, 0));
+        calculateChunkMesh(chunkCoord + glm::ivec3(0, CHUNK_SIZE, 0));
     }
 
     if (blockOffset.z == 0) {
-        calculateChunk(chunkCoord + glm::ivec3(0, 0, -CHUNK_SIZE));
+        calculateChunkMesh(chunkCoord + glm::ivec3(0, 0, -CHUNK_SIZE));
     } else if (blockOffset.z == CHUNK_SIZE - 1) {
-        calculateChunk(chunkCoord + glm::ivec3(0, 0, CHUNK_SIZE));
+        calculateChunkMesh(chunkCoord + glm::ivec3(0, 0, CHUNK_SIZE));
     }
 }
 
-void World::calculateChunk(glm::ivec3 chunkCoord) {
-    // Clear any previous mesh data for this chunk
-    chunkMeshData[chunkCoord].clear();
+void World::calculateChunkMesh(glm::ivec3 chunkCoord) {
     
     // Ensure the chunk exists in the map
     if (chunkMap.find(chunkCoord) == chunkMap.end()) {
         return; // Cannot mesh a chunk that hasn't had its block data generated
     }
+
     Chunk& chunk = chunkMap.at(chunkCoord);
 
     const glm::vec3 normals[6] = {
@@ -192,6 +191,8 @@ void World::calculateChunk(glm::ivec3 chunkCoord) {
         glm::vec3(1.0f, 0.0f, 0.0f),    // Left (+X)
         glm::vec3(0.0f, -1.0f, 0.0f)    // Bottom (-Y)
     };    
+
+    std::vector<float> meshData;
 
     for (int x = 0; x < CHUNK_SIZE; x++) {
         for (int y = 0; y < CHUNK_SIZE; y++) {
@@ -222,7 +223,7 @@ void World::calculateChunk(glm::ivec3 chunkCoord) {
                         float fid = curFace[idx + 5];
                         float blockType = static_cast<float>(chunk.blocks[x][y][z].type);
 
-                        chunkMeshData[chunkCoord].insert(chunkMeshData[chunkCoord].end(), {
+                        meshData.insert(meshData.end(), {
                             vx, vy, vz,           // Position
                             ux, uy,               // UV Coords
                             fid,                  // Face ID
@@ -235,8 +236,12 @@ void World::calculateChunk(glm::ivec3 chunkCoord) {
         }
     }
 
-    GLuint chunkVAO, chunkVBO;
+    uploadChunkMesh(chunkCoord, std::move(meshData));
+}
 
+void World::uploadChunkMesh(glm::ivec3 chunkCoord, std::vector<float> meshData) {
+
+    GLuint chunkVAO, chunkVBO;
     // Check if the chunk already has a VAO/VBO.
     if (chunkVaoMap.find(chunkCoord) == chunkVaoMap.end()) {
         renderer.initWorldObjects(chunkVAO, chunkVBO, chunkCoord, *this);
@@ -245,10 +250,13 @@ void World::calculateChunk(glm::ivec3 chunkCoord) {
         chunkVBO = chunkVboMap.at(chunkCoord);
         glBindBuffer(GL_ARRAY_BUFFER, chunkVBO);
     }
+
+    // update vertex count on main thread
+    chunkVertexCountMap[chunkCoord] = meshData.size() / 10; // 10 floats per vertex
     
     // Upload the new vertex data to the VBO
-    if (!chunkMeshData[chunkCoord].empty()) {
-        glBufferData(GL_ARRAY_BUFFER, chunkMeshData[chunkCoord].size() * sizeof(float), chunkMeshData[chunkCoord].data(), GL_DYNAMIC_DRAW);
+    if (chunkVertexCountMap[chunkCoord]) {
+        glBufferData(GL_ARRAY_BUFFER, meshData.size() * sizeof(float), meshData.data(), GL_DYNAMIC_DRAW);
     }
 }
 

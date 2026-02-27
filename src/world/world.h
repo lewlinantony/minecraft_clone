@@ -32,7 +32,7 @@ class World {
         Renderer renderer;
 
         // Mesh Data
-        std::unordered_map<glm::ivec3, std::vector<float>> chunkMeshData;
+        std::unordered_map<glm::ivec3, int> chunkVertexCountMap;
         std::unordered_map<glm::ivec3, GLuint> chunkVboMap;
         std::unordered_map<glm::ivec3, GLuint> chunkVaoMap;   
         std::vector<glm::ivec3> chunksToLoad; 
@@ -55,8 +55,9 @@ class World {
 
         // Terrain Generation
         void generateTerrain(glm::vec3 playerPosition);        
-        void calculateChunkAndNeighbors(glm::ivec3 block);
-        void calculateChunk(glm::ivec3 chunkCoord);
+        void calculateChunkAndNeighborsMesh(glm::ivec3 block);
+        void calculateChunkMesh(glm::ivec3 chunkCoord);
+        void uploadChunkMesh(glm::ivec3 chunkCoord, std::vector<float> meshData);
         
         void unloadChunks(glm::vec3 playerPosition);
         
