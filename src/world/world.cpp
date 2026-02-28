@@ -2,6 +2,7 @@
 #include <player/player.h>
 #include <iostream>
 
+
 void World::initThreadPool(){
     int numThreads = std::thread::hardware_concurrency()-1; // Leave 1 thread free for the main thread
     for(int i=0; i<numThreads; i++){
@@ -98,7 +99,7 @@ void World::generateTerrain(glm::vec3 playerPosition) {
                 continue;
             }
             
-            for (int y = -Y_LOAD_DIST; y <= Y_LOAD_DIST; y++) {
+            for (int y = -Y_LIMIT; y <= Y_LIMIT; y++) {
                 
                 //decoupling Y to iterate from Y_LIMIT to -Y_LIMIT cause worlds vertical bounds is fixed and is independent of the players position
                 glm::ivec3 chunkOrigin = glm::ivec3(
@@ -145,7 +146,7 @@ void World::generateTerrain(glm::vec3 playerPosition) {
             }
         }
     }
-
+    // is there really a ned for a vector to store new meshed chunks
     for (const auto& chunkCoord : newChunksToMesh) {
         {
             std::unique_lock<std::mutex> lock(queueMutex);
@@ -154,46 +155,6 @@ void World::generateTerrain(glm::vec3 playerPosition) {
             });
         } // get out when ur done with the lock so we dont block other threads from pushing tasks while we calculate the mesh
         condition.notify_one(); // Notify one worker thread that there's a new task
-    }
-}
-
-void World::unloadChunks(glm::vec3 playerPosition) {
-    auto startTime = std::chrono::high_resolution_clock::now();
-    double duration = 0.0;
-
-    // Sort chunksToLoad based on distance from player (farthest first to pop the nearest first)
-    sort(chunksToLoad.begin(), chunksToLoad.end(), [&](const glm::ivec3& a, const glm::ivec3& b) {
-        glm::ivec3 playerChunkOrigin = getChunkOrigin(glm::round(playerPosition));
-        float distA = glm::length(glm::vec3(a - playerChunkOrigin));
-        float distB = glm::length(glm::vec3(b - playerChunkOrigin));
-        return distA > distB;
-    });
-
-
-    while(duration<processDuration) { // Limit to processDuration milliseconds per frame
-        if (!chunksToLoad.empty()) {
-            glm::ivec3 chunkCoord = chunksToLoad.back();
-            calculateChunkMesh(chunkCoord);
-            
-            glm::ivec3 neighbors[4] = {
-                chunkCoord + glm::ivec3(CHUNK_SIZE, 0, 0),  // East
-                chunkCoord + glm::ivec3(-CHUNK_SIZE, 0, 0), // West
-                chunkCoord + glm::ivec3(0, 0, CHUNK_SIZE),  // South
-                chunkCoord + glm::ivec3(0, 0, -CHUNK_SIZE)  // North
-            };
-
-            for (const auto& neighborPos : neighbors) {
-                // Only update if the neighbor actually exists!
-                if (chunkMap.find(neighborPos) != chunkMap.end()) {
-                    calculateChunkMesh(neighborPos);
-                }
-            }        
-            chunksToLoad.pop_back();
-        } else {
-            break;
-        }
-        auto currentTime = std::chrono::high_resolution_clock::now();
-        duration = std::chrono::duration<double, std::milli>(currentTime - startTime).count();        
     }
 }
 
@@ -293,7 +254,6 @@ void World::calculateChunkMesh(glm::ivec3 chunkCoord) {
             uploadChunkMesh(chunkCoord, std::move(meshData));
         });
     }
-    // uploadChunkMesh(chunkCoord, std::move(meshData));
 }
 
 void World::uploadChunkMesh(glm::ivec3 chunkCoord, std::vector<float> meshData) {
@@ -359,7 +319,7 @@ void World::init(glm::vec3& playerPosition) {
     // Position the player above the terrain at (0,0)
     playerPosition = glm::vec3(0.0f, (noise.GetNoise(0.0f, 0.0f) + 1. * amplitude) + 3.0f, 0.0f);
 
-    // THREADPOOL
+    // Initialize the thread pool before generating terrain
     initThreadPool();
 
     // Generate the initial terrain around the player
@@ -367,6 +327,7 @@ void World::init(glm::vec3& playerPosition) {
 }
 
 void World::cleanup() {
+    // join worker threads
     cleanupThreadPool();
 
     // Delete all OpenGL objects

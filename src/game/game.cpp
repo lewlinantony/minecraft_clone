@@ -1,5 +1,6 @@
 #include <game/game.h>
 
+
 void Game::processInput() {
     // Close window
     if (glfwGetKey(m_window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
@@ -143,7 +144,7 @@ void Game::update() {
     m_camera.position = m_player.position + glm::vec3(0.0f, m_player.eyeHeight, 0.0f);
     performRaycasting();
 
-    m_world.processMainThreadTasks(); // Process any tasks that need to run on the main thread (like VBO updates)
+    m_world.processMainThreadTasks(); // empty the main thread task queue and execute tasks (uploading chunk meshes)
 }
 
 void Game::render() {

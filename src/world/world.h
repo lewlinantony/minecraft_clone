@@ -15,6 +15,7 @@
 #include <mutex>
 #include <condition_variable>
 
+
 // Forward declaration
 class Player; 
 
@@ -39,13 +40,10 @@ class World {
         std::unordered_map<glm::ivec3, int> chunkVertexCountMap;
         std::unordered_map<glm::ivec3, GLuint> chunkVboMap;
         std::unordered_map<glm::ivec3, GLuint> chunkVaoMap;   
-        std::vector<glm::ivec3> chunksToLoad; 
 
         // Render and Load Distances
         int Y_LIMIT = 4; // Vertical world limit in chunks (total height in blocks = Y_LIMIT*CHUNK_SIZE)
-        int Y_RENDER_DIST = 10;
         int XZ_RENDER_DIST = 25;
-        int Y_LOAD_DIST = Y_RENDER_DIST+1;
         int XZ_LOAD_DIST = XZ_RENDER_DIST+1;     
         
         // Lifecycle
@@ -62,7 +60,6 @@ class World {
         void calculateChunkAndNeighborsMesh(glm::ivec3 block);
         void calculateChunkMesh(glm::ivec3 chunkCoord);
         void uploadChunkMesh(glm::ivec3 chunkCoord, std::vector<float> meshData);        
-        void unloadChunks(glm::vec3 playerPosition);
 
         // Threadpool
         std::vector<std::thread> workerThreads;

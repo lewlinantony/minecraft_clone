@@ -1,5 +1,6 @@
 #pragma once
 
+
 // Hash function for glm::ivec3
 namespace std {
     template<>

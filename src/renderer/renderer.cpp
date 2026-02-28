@@ -5,7 +5,6 @@
 #include <iostream>
 
 
-
 void Renderer::initShaders() {
     chunkShader = std::make_unique<Shader>("shaders/world/shader.vert", "shaders/world/shader.frag");
     selectedBlockShader = std::make_unique<Shader>("shaders/selectedBlock/shader.vert", "shaders/selectedBlock/shader.frag");

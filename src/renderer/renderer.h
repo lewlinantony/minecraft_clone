@@ -11,11 +11,11 @@
 #include <core/constants.h>
 #include <renderer/frustum.h>
 
+
 // Forward Declarations
 struct Player;
 struct Camera;
 class World;
-
 
 class Renderer {
     public:

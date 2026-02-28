@@ -3,6 +3,7 @@
 
 #include <core/constants.h>
 
+
 // INPUT MANAGERS
 struct InputManager {
     // Mouse State

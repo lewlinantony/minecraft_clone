@@ -2,6 +2,7 @@
 #include <glm/glm.hpp>
 #include <array>
 
+
 struct Plane {
     glm::vec3 normal;
     float distance;
