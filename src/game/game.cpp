@@ -143,8 +143,7 @@ void Game::update() {
     m_camera.position = m_player.position + glm::vec3(0.0f, m_player.eyeHeight, 0.0f);
     performRaycasting();
 
-    // Unload stored chunks each frame
-    m_world.unloadChunks(m_player.position);
+    m_world.processMainThreadTasks(); // Process any tasks that need to run on the main thread (like VBO updates)
 }
 
 void Game::render() {

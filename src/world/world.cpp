@@ -2,6 +2,51 @@
 #include <player/player.h>
 #include <iostream>
 
+void World::initThreadPool(){
+    int numThreads = std::thread::hardware_concurrency()-1; // Leave 1 thread free for the main thread
+    for(int i=0; i<numThreads; i++){
+        workerThreads.emplace_back([this]{
+            while(true){
+                std::function<void()> task;
+                {
+                    std::unique_lock<std::mutex> lock(queueMutex);
+                    condition.wait(lock, [this]{ return !taskQueue.empty() || stopThreads; }); // wait for a task or stop signal 
+                    if(stopThreads) return; // Exit thread if stopping (Hard exit)
+                    task = std::move(taskQueue.front());
+                    taskQueue.pop();
+                }
+                task(); // Execute the task
+            }
+        });
+    }
+}
+
+void World::cleanupThreadPool(){
+    {
+        std::unique_lock<std::mutex> lock(queueMutex);
+        stopThreads = true; // Signal threads to stop
+    }
+    condition.notify_all(); // Wake up all threads to let them exit
+    for(std::thread& thread : workerThreads){
+        if(thread.joinable()){
+            thread.join(); // Wait for all threads to finish
+        }
+    }
+}
+
+void World::processMainThreadTasks(){
+    while(true){
+        std::function<void()> task;
+        {
+            std::unique_lock<std::mutex> lock(mainThreadQueueMutex);
+            if(mainThreadTasks.empty()) break; // No more tasks to process
+            task = std::move(mainThreadTasks.front());
+            mainThreadTasks.pop();
+        }
+        task(); // Execute the task
+    }
+}
+
 Block* World::getBlock(glm::ivec3 blockPosition) {
     glm::ivec3 chunkCoord = getChunkOrigin(blockPosition);
 
@@ -102,8 +147,13 @@ void World::generateTerrain(glm::vec3 playerPosition) {
     }
 
     for (const auto& chunkCoord : newChunksToMesh) {
-        // Add to vector to calculate mesh later
-        chunksToLoad.push_back(chunkCoord);
+        {
+            std::unique_lock<std::mutex> lock(queueMutex);
+            taskQueue.push([this, chunkCoord]{
+                calculateChunkMesh(chunkCoord);
+            });
+        } // get out when ur done with the lock so we dont block other threads from pushing tasks while we calculate the mesh
+        condition.notify_one(); // Notify one worker thread that there's a new task
     }
 }
 
@@ -147,6 +197,7 @@ void World::unloadChunks(glm::vec3 playerPosition) {
     }
 }
 
+// potentially add this to the taskqueue too in the future
 void World::calculateChunkAndNeighborsMesh(glm::ivec3 block) {
     glm::ivec3 chunkCoord = getChunkOrigin(block);
     glm::ivec3 blockOffset = block - chunkCoord;
@@ -236,7 +287,13 @@ void World::calculateChunkMesh(glm::ivec3 chunkCoord) {
         }
     }
 
-    uploadChunkMesh(chunkCoord, std::move(meshData));
+    {
+        std::unique_lock<std::mutex> lock(mainThreadQueueMutex);
+        mainThreadTasks.push([this, chunkCoord, meshData = std::move(meshData)]() mutable {
+            uploadChunkMesh(chunkCoord, std::move(meshData));
+        });
+    }
+    // uploadChunkMesh(chunkCoord, std::move(meshData));
 }
 
 void World::uploadChunkMesh(glm::ivec3 chunkCoord, std::vector<float> meshData) {
@@ -302,11 +359,16 @@ void World::init(glm::vec3& playerPosition) {
     // Position the player above the terrain at (0,0)
     playerPosition = glm::vec3(0.0f, (noise.GetNoise(0.0f, 0.0f) + 1. * amplitude) + 3.0f, 0.0f);
 
+    // THREADPOOL
+    initThreadPool();
+
     // Generate the initial terrain around the player
     generateTerrain(playerPosition);       
 }
 
 void World::cleanup() {
+    cleanupThreadPool();
+
     // Delete all OpenGL objects
     for (auto& pair : chunkVboMap) glDeleteBuffers(1, &pair.second);
     for (auto& pair : chunkVaoMap) glDeleteVertexArrays(1, &pair.second);
