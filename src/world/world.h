@@ -13,6 +13,7 @@
 #include <thread>
 #include <functional>
 #include <mutex>
+#include <shared_mutex>
 #include <condition_variable>
 
 
@@ -63,7 +64,7 @@ class World {
 
         // Threadpool
         std::vector<std::thread> workerThreads;
-        std::queue<std::function<void()>> taskQueue;
+        std::deque<std::function<void()>> taskQueue;
         std::mutex queueMutex;
         std::condition_variable condition;
         bool stopThreads = false;
@@ -72,11 +73,13 @@ class World {
 
         std::queue<std::function<void()>> mainThreadTasks;
         std::mutex mainThreadQueueMutex;
+        std::shared_mutex chunkMapMutex; 
         void processMainThreadTasks();
         
     private:        
         // World Data
         std::unordered_map<glm::ivec3, Chunk> chunkMap;
+        
         
         // Noise Parameters
         FastNoiseLite noise;
@@ -90,7 +93,7 @@ class World {
         double processDuration = 10.0;
 
         // Helpers
-        std::vector<int> getVisibleFaces(glm::ivec3 block);
+        uint8_t getVisibleFaces(glm::ivec3 block);
     };
     
     

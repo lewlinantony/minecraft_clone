@@ -1,6 +1,5 @@
 #include <world/world.h>
 #include <player/player.h>
-#include <iostream>
 
 
 void World::initThreadPool(){
@@ -10,11 +9,11 @@ void World::initThreadPool(){
             while(true){
                 std::function<void()> task;
                 {
-                    std::unique_lock<std::mutex> lock(queueMutex);
+                    std::unique_lock<std::mutex> lock(queueMutex); // we use unique_lock here because condition_variable requires it 
                     condition.wait(lock, [this]{ return !taskQueue.empty() || stopThreads; }); // wait for a task or stop signal 
                     if(stopThreads) return; // Exit thread if stopping (Hard exit)
                     task = std::move(taskQueue.front());
-                    taskQueue.pop();
+                    taskQueue.pop_front();
                 }
                 task(); // Execute the task
             }
@@ -24,7 +23,7 @@ void World::initThreadPool(){
 
 void World::cleanupThreadPool(){
     {
-        std::unique_lock<std::mutex> lock(queueMutex);
+        std::lock_guard<std::mutex> lock(queueMutex);
         stopThreads = true; // Signal threads to stop
     }
     condition.notify_all(); // Wake up all threads to let them exit
@@ -39,7 +38,7 @@ void World::processMainThreadTasks(){
     while(true){
         std::function<void()> task;
         {
-            std::unique_lock<std::mutex> lock(mainThreadQueueMutex);
+            std::lock_guard<std::mutex> lock(mainThreadQueueMutex);
             if(mainThreadTasks.empty()) break; // No more tasks to process
             task = std::move(mainThreadTasks.front());
             mainThreadTasks.pop();
@@ -48,6 +47,9 @@ void World::processMainThreadTasks(){
     }
 }
 
+// NOTE
+// when u call getBlock, if the region of the function call has not locked chunkMap, use a shared_lock to call this function
+// if the function call region has already locked chunkMap with a shared_lock, then just call this function without locking again
 Block* World::getBlock(glm::ivec3 blockPosition) {
     glm::ivec3 chunkCoord = getChunkOrigin(blockPosition);
 
@@ -77,6 +79,8 @@ glm::ivec3 World::getChunkOrigin(glm::ivec3 blockPosition) {
 }
 
 void World::setBlock(glm::ivec3 blockPosition, int type) {
+    std::unique_lock<std::shared_mutex> writeLock(chunkMapMutex);
+
     glm::ivec3 chunkCoord = getChunkOrigin(blockPosition);
 
     // Find the chunk in the map. If it exists, modify it.
@@ -89,6 +93,8 @@ void World::setBlock(glm::ivec3 blockPosition, int type) {
 
 void World::generateTerrain(glm::vec3 playerPosition) {
     std::vector<glm::ivec3> newChunksToMesh;
+    newChunksToMesh.reserve((XZ_LOAD_DIST*2+1) * (XZ_LOAD_DIST*2+1) * (Y_LIMIT*2+1)); // Reserve space to avoid reallocations
+
     glm::ivec3 playerChunkOrigin = getChunkOrigin(glm::round(playerPosition));
 
     for (int cx = -XZ_LOAD_DIST; cx <= XZ_LOAD_DIST; cx++) {
@@ -111,15 +117,18 @@ void World::generateTerrain(glm::vec3 playerPosition) {
                 if(chunkOrigin.y < -(Y_LIMIT*CHUNK_SIZE) || chunkOrigin.y > Y_LIMIT*CHUNK_SIZE) {
                     continue; // Skip chunks beyond vertical world limits
                 }
-
-
-                // If chunk data already exists, skip it
-                if (chunkMap.count(chunkOrigin)) {
-                    continue;
+                
+                {
+                    std::shared_lock<std::shared_mutex> lock(chunkMapMutex);
+                    // If chunk data already exists, skip it
+                    if (chunkMap.count(chunkOrigin)) {
+                        continue;
+                    }
                 }
                 
+                
                 // Chunk does not exist, so generate its block data
-                Chunk& currentChunk = chunkMap[chunkOrigin];
+                Chunk currentChunk;
                 newChunksToMesh.push_back(chunkOrigin);
 
                 for (int x = 0; x < CHUNK_SIZE; x++) {
@@ -143,14 +152,19 @@ void World::generateTerrain(glm::vec3 playerPosition) {
                         }
                     }
                 }
+
+                {
+                    std::unique_lock<std::shared_mutex> writeLock(chunkMapMutex);
+                    chunkMap[chunkOrigin] = std::move(currentChunk);
+                }
             }
         }
     }
     // is there really a ned for a vector to store new meshed chunks
     for (const auto& chunkCoord : newChunksToMesh) {
         {
-            std::unique_lock<std::mutex> lock(queueMutex);
-            taskQueue.push([this, chunkCoord]{
+            std::lock_guard<std::mutex> lock(queueMutex);
+            taskQueue.push_back([this, chunkCoord]{
                 calculateChunkMesh(chunkCoord);
             });
         } // get out when ur done with the lock so we dont block other threads from pushing tasks while we calculate the mesh
@@ -158,98 +172,122 @@ void World::generateTerrain(glm::vec3 playerPosition) {
     }
 }
 
-// potentially add this to the taskqueue too in the future
 void World::calculateChunkAndNeighborsMesh(glm::ivec3 block) {
     glm::ivec3 chunkCoord = getChunkOrigin(block);
     glm::ivec3 blockOffset = block - chunkCoord;
 
+    std::vector<glm::ivec3> chunksToRemesh;
+    chunksToRemesh.reserve(4); 
+
     // Always recalculate the mesh for the chunk the block is in
-    calculateChunkMesh(chunkCoord);
+    chunksToRemesh.push_back(chunkCoord);
 
     // If the block is on a boundary, the neighbor chunk's mesh is also affected
     if (blockOffset.x == 0) {
-        calculateChunkMesh(chunkCoord + glm::ivec3(-CHUNK_SIZE, 0, 0));
+        chunksToRemesh.push_back(chunkCoord + glm::ivec3(-CHUNK_SIZE, 0, 0));
     } else if (blockOffset.x == CHUNK_SIZE - 1) {
-        calculateChunkMesh(chunkCoord + glm::ivec3(CHUNK_SIZE, 0, 0));
+        chunksToRemesh.push_back(chunkCoord + glm::ivec3(CHUNK_SIZE, 0, 0));
     }
     
     if (blockOffset.y == 0) {
-        calculateChunkMesh(chunkCoord + glm::ivec3(0, -CHUNK_SIZE, 0));
+        chunksToRemesh.push_back(chunkCoord + glm::ivec3(0, -CHUNK_SIZE, 0));
     } else if (blockOffset.y == CHUNK_SIZE - 1) {
-        calculateChunkMesh(chunkCoord + glm::ivec3(0, CHUNK_SIZE, 0));
+        chunksToRemesh.push_back(chunkCoord + glm::ivec3(0, CHUNK_SIZE, 0));
     }
 
     if (blockOffset.z == 0) {
-        calculateChunkMesh(chunkCoord + glm::ivec3(0, 0, -CHUNK_SIZE));
+        chunksToRemesh.push_back(chunkCoord + glm::ivec3(0, 0, -CHUNK_SIZE));
     } else if (blockOffset.z == CHUNK_SIZE - 1) {
-        calculateChunkMesh(chunkCoord + glm::ivec3(0, 0, CHUNK_SIZE));
+        chunksToRemesh.push_back(chunkCoord + glm::ivec3(0, 0, CHUNK_SIZE));
+    }
+
+    for (const auto& coord : chunksToRemesh) {
+        {
+            std::lock_guard<std::mutex> lock(queueMutex);
+            taskQueue.push_back([this, coord]{
+                calculateChunkMesh(coord);
+            });
+        }
+        condition.notify_one();
     }
 }
 
 void World::calculateChunkMesh(glm::ivec3 chunkCoord) {
     
-    // Ensure the chunk exists in the map
-    if (chunkMap.find(chunkCoord) == chunkMap.end()) {
-        return; // Cannot mesh a chunk that hasn't had its block data generated
-    }
-
-    Chunk& chunk = chunkMap.at(chunkCoord);
-
-    const glm::vec3 normals[6] = {
-        glm::vec3(0.0f, 1.0f, 0.0f),    // Top (+Y)
-        glm::vec3(0.0f, 0.0f, -1.0f),   // Front (-Z)
-        glm::vec3(-1.0f, 0.0f, 0.0f),   // Right (-X)
-        glm::vec3(0.0f, 0.0f, 1.0f),    // Back (+Z)
-        glm::vec3(1.0f, 0.0f, 0.0f),    // Left (+X)
-        glm::vec3(0.0f, -1.0f, 0.0f)    // Bottom (-Y)
-    };    
-
     std::vector<float> meshData;
+    meshData.reserve(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE * 6 * 10); // Reserve space for worst case (all blocks visible, 6 faces each, 10 floats per vertex)
 
-    for (int x = 0; x < CHUNK_SIZE; x++) {
-        for (int y = 0; y < CHUNK_SIZE; y++) {
-            for (int z = 0; z < CHUNK_SIZE; z++) {
-                if (chunk.blocks[x][y][z].type == 0) continue; // Skip air blocks
+    {
 
-                glm::ivec3 blockPosition = chunkCoord + glm::ivec3(x, y, z);
-                std::vector<int> faces = getVisibleFaces(blockPosition);
-                for (int faceID : faces) {
-                    const float* curFace = faceVertices[faceID];
-                    if (!curFace) continue;
+        std::shared_lock<std::shared_mutex> lock(chunkMapMutex);
 
-                    const glm::vec3 normal = normals[faceID];
+        // Ensure the chunk exists in the map
+        if (chunkMap.find(chunkCoord) == chunkMap.end()) {
+            return; // Cannot mesh a chunk that hasn't had its block data generated
+        }
 
-                    for (int i = 0; i < 6; ++i) { // 6 vertices per face
-                        int idx = i * 6; // 6 attributes per vertex in face data
+        Chunk& chunk = chunkMap.at(chunkCoord);
 
-                        // Vertex position 
-                        float vx = curFace[idx + 0] + blockPosition.x;
-                        float vy = curFace[idx + 1] + blockPosition.y;
-                        float vz = curFace[idx + 2] + blockPosition.z;
+        const glm::vec3 normals[6] = {
+            glm::vec3(0.0f, 1.0f, 0.0f),    // Top (+Y)
+            glm::vec3(0.0f, 0.0f, -1.0f),   // Front (-Z)
+            glm::vec3(-1.0f, 0.0f, 0.0f),   // Right (-X)
+            glm::vec3(0.0f, 0.0f, 1.0f),    // Back (+Z)
+            glm::vec3(1.0f, 0.0f, 0.0f),    // Left (+X)
+            glm::vec3(0.0f, -1.0f, 0.0f)    // Bottom (-Y)
+        };    
 
-                        // Texture coordinates
-                        float ux = curFace[idx + 3];
-                        float uy = curFace[idx + 4];
+
+        for (int x = 0; x < CHUNK_SIZE; x++) {
+            for (int y = 0; y < CHUNK_SIZE; y++) {
+                for (int z = 0; z < CHUNK_SIZE; z++) {
+                    if (chunk.blocks[x][y][z].type == 0) continue; // Skip air blocks
+
+                    glm::ivec3 blockPosition = chunkCoord + glm::ivec3(x, y, z);
+                    uint8_t faces = getVisibleFaces(blockPosition); // Get visible faces bitmask for this block
+
+                    for (int faceID=0; faceID<6; faceID++) {
                         
-                        // Face ID and Block Type
-                        float fid = curFace[idx + 5];
-                        float blockType = static_cast<float>(chunk.blocks[x][y][z].type);
+                        if ((faces & (1 << faceID)) == 0) continue; // This face is not visible, skip it
 
-                        meshData.insert(meshData.end(), {
-                            vx, vy, vz,           // Position
-                            ux, uy,               // UV Coords
-                            fid,                  // Face ID
-                            blockType,            // Block Type
-                            normal.x, normal.y, normal.z // Normal
-                        });
+                        const float* curFace = faceVertices[faceID];
+                        if (!curFace) continue;
+
+                        const glm::vec3 normal = normals[faceID];
+
+                        for (int i = 0; i < 6; ++i) { // 6 vertices per face
+                            int idx = i * 6; // 6 attributes per vertex in face data
+
+                            // Vertex position 
+                            float vx = curFace[idx + 0] + blockPosition.x;
+                            float vy = curFace[idx + 1] + blockPosition.y;
+                            float vz = curFace[idx + 2] + blockPosition.z;
+
+                            // Texture coordinates
+                            float ux = curFace[idx + 3];
+                            float uy = curFace[idx + 4];
+                            
+                            // Face ID and Block Type
+                            float fid = curFace[idx + 5];
+                            float blockType = static_cast<float>(chunk.blocks[x][y][z].type);
+
+                            meshData.insert(meshData.end(), {
+                                vx, vy, vz,           // Position
+                                ux, uy,               // UV Coords
+                                fid,                  // Face ID
+                                blockType,            // Block Type
+                                normal.x, normal.y, normal.z // Normal
+                            });
+                        }
                     }
                 }
             }
         }
+        
     }
 
     {
-        std::unique_lock<std::mutex> lock(mainThreadQueueMutex);
+        std::lock_guard<std::mutex> mainLock(mainThreadQueueMutex);
         mainThreadTasks.push([this, chunkCoord, meshData = std::move(meshData)]() mutable {
             uploadChunkMesh(chunkCoord, std::move(meshData));
         });
@@ -277,8 +315,9 @@ void World::uploadChunkMesh(glm::ivec3 chunkCoord, std::vector<float> meshData) 
     }
 }
 
-std::vector<int> World::getVisibleFaces(glm::ivec3 block) {
-    std::vector<int> visibleFaces;
+uint8_t World::getVisibleFaces(glm::ivec3 block) {
+    uint8_t visibleFaces = 0;
+
     // Directions corresponding to face IDs 0 through 5
     const glm::ivec3 directions[6] = {
         glm::ivec3(0, 1, 0),    // Top (+Y)
@@ -299,7 +338,7 @@ std::vector<int> World::getVisibleFaces(glm::ivec3 block) {
         }
      
         else if (!neighborBlock || neighborBlock->type == 0) {// If chunk doesn't exist or block is air
-            visibleFaces.push_back(i);
+            visibleFaces |= (1 << i); // Mark this bit's face as visible
         }
 
     }

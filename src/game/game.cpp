@@ -76,7 +76,11 @@ void Game::processInput() {
     // Block Removal
     bool mouseLeftIsPressed = glfwGetMouseButton(m_window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
     if (mouseLeftIsPressed && !m_input.mouseLeftWasPressed && m_selectedBlock != glm::ivec3(INT_MAX)) {
-        Block* block = m_world.getBlock(m_selectedBlock);
+        Block* block;
+        {
+            std::shared_lock<std::shared_mutex> lock(m_world.chunkMapMutex);
+            block = m_world.getBlock(m_selectedBlock);
+        }
         if(block && block->type != 0) { // Check if block exists and is not air
             // Prevent removing bedrock in survival mode
             if (m_player.creativeMode || m_selectedBlock.y != -m_world.Y_LIMIT) {
@@ -90,7 +94,11 @@ void Game::processInput() {
     // Block Placement
     bool mouseRightIsPressed = glfwGetMouseButton(m_window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
     if (mouseRightIsPressed && !m_input.mouseRightWasPressed && m_previousBlock != glm::ivec3(INT_MAX)) {
-        Block* block = m_world.getBlock(m_previousBlock);
+        Block* block;
+        {
+            std::shared_lock<std::shared_mutex> lock(m_world.chunkMapMutex);
+            block = m_world.getBlock(m_previousBlock);
+        }
         if(block && block->type == 0) { // Check if block is air
             m_world.setBlock(m_previousBlock, m_curBlockType); 
             m_world.calculateChunkAndNeighborsMesh(m_previousBlock);
@@ -170,7 +178,11 @@ void Game::performRaycasting() {
             
             if(blockPosition == prevBlockThisRay) continue;
 
-            Block* hitBlock = m_world.getBlock(blockPosition);
+            Block* hitBlock;
+            { 
+                std::shared_lock<std::shared_mutex> lock(m_world.chunkMapMutex);
+                hitBlock = m_world.getBlock(blockPosition);
+            }
             if (hitBlock && hitBlock->type != 0) {
                 // We hit a non-air block
                 if (i < closestHit){

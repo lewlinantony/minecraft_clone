@@ -189,7 +189,11 @@ void Renderer::render(glm::ivec3 selectedBlock, Camera& camera, Player& player, 
     // --- Render Selected Block Highlight ---
     if (selectedBlock != glm::ivec3(INT_MAX) && !player.creativeMode){
         selectedBlockShader->use();
-        Block* block = world.getBlock(selectedBlock);
+        Block* block;
+        {
+            std::shared_lock<std::shared_mutex> lock(world.chunkMapMutex);
+            block = world.getBlock(selectedBlock);
+        }
         if (block) { // Ensure block exists before trying to render it
             selectedBlockShader->setInt("blockType", block->type);
 
