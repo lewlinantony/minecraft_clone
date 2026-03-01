@@ -35,9 +35,11 @@ void World::cleanupThreadPool(){
 }
 
 void World::processMainThreadTasks(){
-    int tasksProcessed = 0;
-    const int maxTasksPerFrame = 5; // Limit how many tasks we process per frame
-    while(tasksProcessed < maxTasksPerFrame){
+
+    const double MAX_UPLOAD_TIME_MS = 2.0;
+    auto startTime = std::chrono::high_resolution_clock::now();
+
+    while(true){
         std::function<void()> task;
         {
             std::lock_guard<std::mutex> lock(mainThreadQueueMutex);
@@ -46,7 +48,14 @@ void World::processMainThreadTasks(){
             mainThreadTasks.pop();
         }
         task(); // Execute the task
-        tasksProcessed++;
+
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        double elapsedTime = std::chrono::duration<double, std::milli>(currentTime - startTime).count();
+
+        // If we ran out of time, stop uploading and save the rest for the next frame
+        if (elapsedTime >= MAX_UPLOAD_TIME_MS) {
+            break; 
+        }        
     }
 }
 
