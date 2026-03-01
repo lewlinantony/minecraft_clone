@@ -145,7 +145,7 @@ void Game::update() {
         m_physics.updatePhysics(m_player, m_collision, m_world, m_deltaTime, m_playerMovedChunks);
     }
     if (m_playerMovedChunks && generateWorld) {
-        m_world.generateTerrain(m_player.position);
+        m_world.generateChunks(m_player.position);
         m_playerMovedChunks = false;
     }
     // Update camera position to follow player's eyes

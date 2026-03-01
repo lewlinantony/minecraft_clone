@@ -57,7 +57,8 @@ class World {
         glm::ivec3 getChunkOrigin(glm::ivec3 blockPosition);
 
         // Terrain Generation
-        void generateTerrain(glm::vec3 playerPosition);        
+        void generateChunks(glm::vec3 playerPosition);  
+        void generateChunkData(glm::ivec3 chunkOrigin); 
         void calculateChunkAndNeighborsMesh(glm::ivec3 block);
         void calculateChunkMesh(glm::ivec3 chunkCoord);
         void uploadChunkMesh(glm::ivec3 chunkCoord, std::vector<float> meshData);        

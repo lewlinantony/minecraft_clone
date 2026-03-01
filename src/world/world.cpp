@@ -35,7 +35,9 @@ void World::cleanupThreadPool(){
 }
 
 void World::processMainThreadTasks(){
-    while(true){
+    int tasksProcessed = 0;
+    const int maxTasksPerFrame = 5; // Limit how many tasks we process per frame
+    while(tasksProcessed < maxTasksPerFrame){
         std::function<void()> task;
         {
             std::lock_guard<std::mutex> lock(mainThreadQueueMutex);
@@ -44,6 +46,7 @@ void World::processMainThreadTasks(){
             mainThreadTasks.pop();
         }
         task(); // Execute the task
+        tasksProcessed++;
     }
 }
 
@@ -91,11 +94,12 @@ void World::setBlock(glm::ivec3 blockPosition, int type) {
     }
 }
 
-void World::generateTerrain(glm::vec3 playerPosition) {
-    std::vector<glm::ivec3> newChunksToMesh;
-    newChunksToMesh.reserve((XZ_LOAD_DIST*2+1) * (XZ_LOAD_DIST*2+1) * (Y_LIMIT*2+1)); // Reserve space to avoid reallocations
+void World::generateChunks(glm::vec3 playerPosition) {
 
     glm::ivec3 playerChunkOrigin = getChunkOrigin(glm::round(playerPosition));
+
+    std::vector<glm::ivec3> chunksToGenerate;  // vector of all chunks around the player that we need to generate data for
+    chunksToGenerate.reserve((XZ_LOAD_DIST*2+1) * (XZ_LOAD_DIST*2+1) * (Y_LIMIT*2+1)); // Reserve space for worst case
 
     for (int cx = -XZ_LOAD_DIST; cx <= XZ_LOAD_DIST; cx++) {
         for (int cz = -XZ_LOAD_DIST; cz <= XZ_LOAD_DIST; cz++) {
@@ -106,8 +110,8 @@ void World::generateTerrain(glm::vec3 playerPosition) {
             }
             
             for (int y = -Y_LIMIT; y <= Y_LIMIT; y++) {
+            //decoupling Y to iterate from Y_LIMIT to -Y_LIMIT cause worlds vertical bounds is fixed and is independent of the players position
                 
-                //decoupling Y to iterate from Y_LIMIT to -Y_LIMIT cause worlds vertical bounds is fixed and is independent of the players position
                 glm::ivec3 chunkOrigin = glm::ivec3(
                     playerChunkOrigin.x + (cx * CHUNK_SIZE),
                     y * CHUNK_SIZE, 
@@ -125,51 +129,72 @@ void World::generateTerrain(glm::vec3 playerPosition) {
                         continue;
                     }
                 }
-                
-                
-                // Chunk does not exist, so generate its block data
-                Chunk currentChunk;
-                newChunksToMesh.push_back(chunkOrigin);
 
-                for (int x = 0; x < CHUNK_SIZE; x++) {
-                    for (int z = 0; z < CHUNK_SIZE; z++) {
-                        float globalX = (float)(chunkOrigin.x + x);
-                        float globalZ = (float)(chunkOrigin.z + z);
-                        float height = noise.GetNoise(globalX, globalZ) * amplitude; // Scale noise to 0-2*amp
-                        height = glm::round(height);
+                chunksToGenerate.push_back(chunkOrigin);                
+            }
+        }
+    }
 
-                        for (int y = 0; y < CHUNK_SIZE; y++) {
-                            int globalY = chunkOrigin.y + y;
-                            if (globalY > height) {
-                                currentChunk.blocks[x][y][z].type = 0; // Air
-                            } else if (globalY == (int)height) {
-                                currentChunk.blocks[x][y][z].type = 1; // Grass
-                            } else if (globalY >= height - 5) {
-                                currentChunk.blocks[x][y][z].type = 2; // Dirt
-                            } else if (globalY >= -(Y_LIMIT*CHUNK_SIZE)) {
-                                currentChunk.blocks[x][y][z].type = 3; // Stone
-                            }
-                        }
-                    }
-                }
+    std::sort(chunksToGenerate.begin(), chunksToGenerate.end(), [playerChunkOrigin](const glm::ivec3& a, const glm::ivec3& b) {
+        // Calculate squared distance (cheaper than using sqrt)
+        int distA = (a.x - playerChunkOrigin.x)*(a.x - playerChunkOrigin.x) + 
+                    (a.y - playerChunkOrigin.y)*(a.y - playerChunkOrigin.y) + 
+                    (a.z - playerChunkOrigin.z)*(a.z - playerChunkOrigin.z);
+                    
+        int distB = (b.x - playerChunkOrigin.x)*(b.x - playerChunkOrigin.x) + 
+                    (b.y - playerChunkOrigin.y)*(b.y - playerChunkOrigin.y) + 
+                    (b.z - playerChunkOrigin.z)*(b.z - playerChunkOrigin.z);
+                    
+        return distA < distB; // Sort ascending
+    });    
 
-                {
-                    std::unique_lock<std::shared_mutex> writeLock(chunkMapMutex);
-                    chunkMap[chunkOrigin] = std::move(currentChunk);
+    if (!chunksToGenerate.empty()) {
+        std::lock_guard<std::mutex> lock(queueMutex);
+        for (const auto& chunkOrigin : chunksToGenerate) {
+            taskQueue.push_back([this, chunkOrigin]{
+                generateChunkData(chunkOrigin);
+            });
+        }
+    }    
+    condition.notify_all(); 
+}
+
+void World::generateChunkData(glm::ivec3 chunkOrigin) {
+    Chunk currentChunk;
+    for (int x = 0; x < CHUNK_SIZE; x++) {
+        for (int z = 0; z < CHUNK_SIZE; z++) {
+            float globalX = (float)(chunkOrigin.x + x);
+            float globalZ = (float)(chunkOrigin.z + z);
+            float height = noise.GetNoise(globalX, globalZ) * amplitude; // Scale noise to 0-2*amp
+            height = glm::round(height);
+
+            for (int y = 0; y < CHUNK_SIZE; y++) {
+                int globalY = chunkOrigin.y + y;
+                if (globalY > height) {
+                    currentChunk.blocks[x][y][z].type = 0; // Air
+                } else if (globalY == (int)height) {
+                    currentChunk.blocks[x][y][z].type = 1; // Grass
+                } else if (globalY >= height - 5) {
+                    currentChunk.blocks[x][y][z].type = 2; // Dirt
+                } else if (globalY >= -(Y_LIMIT*CHUNK_SIZE)) {
+                    currentChunk.blocks[x][y][z].type = 3; // Stone
                 }
             }
         }
     }
-    // is there really a ned for a vector to store new meshed chunks
-    for (const auto& chunkCoord : newChunksToMesh) {
-        {
-            std::lock_guard<std::mutex> lock(queueMutex);
-            taskQueue.push_back([this, chunkCoord]{
-                calculateChunkMesh(chunkCoord);
-            });
-        } // get out when ur done with the lock so we dont block other threads from pushing tasks while we calculate the mesh
-        condition.notify_one(); // Notify one worker thread that there's a new task
-    }
+
+    {
+        std::unique_lock<std::shared_mutex> writeLock(chunkMapMutex);
+        chunkMap[chunkOrigin] = std::move(currentChunk);
+    }    
+
+    {
+        std::lock_guard<std::mutex> lock(queueMutex);
+        taskQueue.push_back([this, chunkOrigin]{
+            calculateChunkMesh(chunkOrigin);
+        });
+    } // get out when ur done with the lock so we dont block other threads from pushing tasks while we calculate the mesh
+    condition.notify_one(); // Notify one worker thread that there's a new task    
 }
 
 void World::calculateChunkAndNeighborsMesh(glm::ivec3 block) {
@@ -362,7 +387,7 @@ void World::init(glm::vec3& playerPosition) {
     initThreadPool();
 
     // Generate the initial terrain around the player
-    generateTerrain(playerPosition);       
+    generateChunks(playerPosition);       
 }
 
 void World::cleanup() {
