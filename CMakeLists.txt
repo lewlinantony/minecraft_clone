@@ -22,15 +22,8 @@ include_directories(include)
 find_package(OpenGL REQUIRED)
 find_package(glfw3 REQUIRED)
 
-# List only the .cpp files that need to be compiled.
-# Header-only files are handled automatically when they are included.
-set(SOURCE_FILES
-    src/main.cpp
-    src/core/Game.cpp
-    src/components/World.cpp
-    src/rendering/VertexData.cpp
-    src/utils/ThreadPool.cpp
-)
+# Source files
+file(GLOB_RECURSE SOURCE_FILES "src/*.cpp") # Recursively find ALL .cpp files in src/ and subfolders
 
 # Create the final executable from the source files
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
@@ -80,15 +73,11 @@ target_link_libraries(imgui PUBLIC
     ${OPENGL_LIBRARIES}
 )
 
-#================================================================================
-# Final Linking
-#================================================================================
-
-# Specify the include directories needed by the main VoxelGame executable
-target_include_directories(${PROJECT_NAME} PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/extern/glad/include
+# Include directories
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/extern/glad/include #just for glad
     ${CMAKE_CURRENT_SOURCE_DIR}/extern
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 # Link all the libraries to the final executable
