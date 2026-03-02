@@ -118,14 +118,6 @@ void Game::processInput() {
     }
     m_input.f2WasPressed = rIsPressed;
 
-    // Toggle frustum freeze
-    bool fIsPressed = glfwGetKey(m_window, GLFW_KEY_F3) == GLFW_PRESS;
-    if (fIsPressed && !m_input.f3WasPressed) {
-        m_renderer.frozenFrustum = !m_renderer.frozenFrustum;
-    }
-    m_input.f3WasPressed = fIsPressed;
-
-
     if (glfwGetKey(m_window, GLFW_KEY_1) == GLFW_PRESS) {
         m_curBlockType = 1;
     }
