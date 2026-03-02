@@ -1,41 +1,59 @@
+#================================================================================
+# Project Setup
+#================================================================================
 cmake_minimum_required(VERSION 3.10)
-project(minecraft_clone)
+project(VoxelGame)
 
 # Specify C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Mac specific setting
+# Mac specific setting for Apple Silicon
 set(CMAKE_OSX_ARCHITECTURES "arm64")
 
-# Find packages
+#================================================================================
+# Find Packages & Define Source Files
+#================================================================================
+
+# Set the main include directory for headers
+include_directories(include)
+
+# Find required system/external packages
 find_package(OpenGL REQUIRED)
 find_package(glfw3 REQUIRED)
 
 # Source files
 file(GLOB_RECURSE SOURCE_FILES "src/*.cpp") # Recursively find ALL .cpp files in src/ and subfolders
 
-# Create executable
+# Create the final executable from the source files
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
 
-# Create directory structure
+#================================================================================
+# Asset Handling
+#================================================================================
+
+# Ensure asset directories exist in the build folder
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/shaders)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/assets)
 
-# Copy shader files to build directory
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/shaders/world/shader.vert ${CMAKE_CURRENT_BINARY_DIR}/shaders/world/shader.vert COPYONLY)
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/shaders/world/shader.frag ${CMAKE_CURRENT_BINARY_DIR}/shaders/world/shader.frag COPYONLY)
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/shaders/selectedBlock/shader.vert ${CMAKE_CURRENT_BINARY_DIR}/shaders/selectedBlock/shader.vert COPYONLY)
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/shaders/selectedBlock/shader.frag ${CMAKE_CURRENT_BINARY_DIR}/shaders/selectedBlock/shader.frag COPYONLY)
+# Copy assets to the build directory so the executable can find them at runtime.
+# Using file(COPY...) is simpler than configure_file for direct copies.
+file(COPY shaders/ DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+file(COPY assets/ DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
-# Add GLAD library
+#================================================================================
+# Third-Party Library Definitions
+#================================================================================
+
+# --- GLAD ---
 add_library(glad STATIC extern/glad/src/glad.c)
 target_include_directories(glad PUBLIC extern/glad/include)
 
-# Add stb_image library if needed
+# --- stb_image ---
 add_library(stb_image STATIC extern/stb/stb_image.cpp)
 target_include_directories(stb_image PUBLIC extern/stb)
 
-# Add ImGui library
+# --- ImGui ---
 set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/extern/imgui)
 add_library(imgui STATIC
     ${IMGUI_DIR}/imgui.cpp
@@ -46,10 +64,10 @@ add_library(imgui STATIC
     ${IMGUI_DIR}/imgui_impl_glfw.cpp
     ${IMGUI_DIR}/imgui_impl_opengl3.cpp
 )
-target_include_directories(imgui PUBLIC 
-    ${IMGUI_DIR}
-    ${OPENGL_INCLUDE_DIR}
-)
+# Tell imgui where to find its own headers
+target_include_directories(imgui PUBLIC ${IMGUI_DIR})
+# Link imgui to its dependencies. The PUBLIC keyword propagates the necessary
+# include directories (like for glfw3.h) to the imgui target.
 target_link_libraries(imgui PUBLIC
     glfw
     ${OPENGL_LIBRARIES}
@@ -62,11 +80,14 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-# Link libraries
+# Link all the libraries to the final executable
 target_link_libraries(${PROJECT_NAME}
     glad
     stb_image
     imgui
+    # Note: glfw and OPENGL_LIBRARIES are already linked to imgui,
+    # which is then linked here, so they are transitively linked.
+    # However, explicitly listing them is fine and can be clearer.
     glfw
     ${OPENGL_LIBRARIES}
 )
