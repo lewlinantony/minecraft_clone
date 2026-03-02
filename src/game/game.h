@@ -45,7 +45,6 @@ private:
     int m_timeIndex = 0;    
     
     bool m_playerMovedChunks = false; 
-    bool generateWorld = true;
     bool m_wireframe = false;
 
     // Raycasting State (as per your request)

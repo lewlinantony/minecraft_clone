@@ -125,8 +125,9 @@ void Renderer::render(glm::ivec3 selectedBlock, Camera& camera, Player& player, 
     
 
     // Update frustum each frame
-    Frustum frustum;
-    frustum.update(projection * view);
+    if (!frozenFrustum) {
+        frustum.update(projection * view);
+    } 
 
     // --- Render World Chunks ---
     chunkShader->use();

@@ -106,17 +106,9 @@ void Game::processInput() {
     }
     m_input.mouseRightWasPressed = mouseRightIsPressed;
 
-    // Toggle world generation
-    bool pIsPressed = glfwGetKey(m_window, GLFW_KEY_P) == GLFW_PRESS;
-    if (m_player.creativeMode && pIsPressed && !m_input.pWasPressed) {
-        generateWorld = !generateWorld;
-    }
-    m_input.pWasPressed = pIsPressed;
-
-
     // Toggle wireframe mode
-    bool rIsPressed = glfwGetKey(m_window, GLFW_KEY_R) == GLFW_PRESS;
-    if (rIsPressed && !m_input.rWasPressed) {
+    bool rIsPressed = glfwGetKey(m_window, GLFW_KEY_F2) == GLFW_PRESS;
+    if (rIsPressed && !m_input.f2WasPressed) {
         m_wireframe = !m_wireframe;
         if (m_wireframe) {
             glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -124,7 +116,14 @@ void Game::processInput() {
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         }
     }
-    m_input.rWasPressed = rIsPressed;
+    m_input.f2WasPressed = rIsPressed;
+
+    // Toggle frustum freeze
+    bool fIsPressed = glfwGetKey(m_window, GLFW_KEY_F3) == GLFW_PRESS;
+    if (fIsPressed && !m_input.f3WasPressed) {
+        m_renderer.frozenFrustum = !m_renderer.frozenFrustum;
+    }
+    m_input.f3WasPressed = fIsPressed;
 
 
     if (glfwGetKey(m_window, GLFW_KEY_1) == GLFW_PRESS) {
@@ -144,7 +143,7 @@ void Game::update() {
     if (!m_player.creativeMode) {
         m_physics.updatePhysics(m_player, m_collision, m_world, m_deltaTime, m_playerMovedChunks);
     }
-    if (m_playerMovedChunks && generateWorld) {
+    if (m_playerMovedChunks) {
         m_world.generateChunks(m_player.position);
         m_playerMovedChunks = false;
     }

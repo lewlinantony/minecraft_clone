@@ -27,6 +27,8 @@ class Renderer {
         int totalVisibleChunks = 0;
         int inFrustumChunks = 0;        
 
+        bool frozenFrustum = false; 
+
         // Render Functions
         void render(glm::ivec3 selectedBlock, Camera& camera, Player& player, World& world, GLFWwindow* window); 
         void renderImGui(Player& player, World& world, float* updateTimes, float* renderTimes, float* queueSizes, int timeIndex);         
@@ -43,6 +45,9 @@ class Renderer {
         GLuint textureAtlas;
         GLuint selectedBlockVao, selectedBlockVbo;   
 
+        // view frustum
+        Frustum frustum;
+        
         // Initialization Helpers
         void initShaders();
         void initTextures();
