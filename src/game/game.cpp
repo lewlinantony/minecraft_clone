@@ -152,7 +152,7 @@ void Game::update() {
     m_camera.position = m_player.position + glm::vec3(0.0f, m_player.eyeHeight, 0.0f);
     performRaycasting();
 
-    m_world.processMainThreadTasks(); // empty the main thread task queue and execute tasks (uploading chunk meshes)
+    m_threadpool.processMainThreadTasks(); // empty the main thread task queue and execute tasks (uploading chunk meshes)
 }
 
 void Game::render() {
@@ -262,11 +262,15 @@ void Game::initGlad() {
 }
 
 void Game::initWorld() {
-    m_world.init(m_player.position);  
+    m_world.init(m_player.position, &m_threadpool);  
 }
 
 void Game::initRenderer() {
     m_renderer.init(m_window); 
+}
+
+void Game::initThreadpool(){
+    m_threadpool.init();
 }
 
 void Game::onMouseMovement(double xpos, double ypos) {
@@ -318,6 +322,7 @@ void Game::framebuffer_size_callback(GLFWwindow* window, int width, int height) 
 void Game::init() {
     initGlfw();
     initGlad();
+    initThreadpool();
     initWorld();
     initRenderer();
 }
@@ -354,11 +359,7 @@ void Game::run() {
         float renderTime = std::chrono::duration<float, std::milli>(endRender - startRender).count();
         m_updateTimes[m_timeIndex] = mainTime;
         m_renderTimes[m_timeIndex] = renderTime;
-        size_t queueSize;
-        {
-            std::lock_guard<std::mutex> lock(m_world.queueMutex);
-            queueSize = m_world.taskQueue.size();
-        } 
+        size_t queueSize = m_threadpool.getWorkerQueueSize();
         m_queueSizes[m_timeIndex] = static_cast<float>(queueSize);
         m_timeIndex = (m_timeIndex + 1) % 100;
 
@@ -368,6 +369,7 @@ void Game::run() {
 }
 
 void Game::cleanup() {
+    m_threadpool.cleanup();
     m_world.cleanup();
     m_renderer.cleanup();    
     glfwTerminate();

@@ -2,63 +2,6 @@
 #include <player/player.h>
 
 
-void World::initThreadPool(){
-    int numThreads = std::thread::hardware_concurrency()-1; // Leave 1 thread free for the main thread
-    for(int i=0; i<numThreads; i++){
-        workerThreads.emplace_back([this]{
-            while(true){
-                std::function<void()> task;
-                {
-                    std::unique_lock<std::mutex> lock(queueMutex); // we use unique_lock here because condition_variable requires it 
-                    condition.wait(lock, [this]{ return !taskQueue.empty() || stopThreads; }); // wait for a task or stop signal 
-                    if(stopThreads) return; // Exit thread if stopping (Hard exit)
-                    task = std::move(taskQueue.front());
-                    taskQueue.pop_front();
-                }
-                task(); // Execute the task
-            }
-        });
-    }
-}
-
-void World::cleanupThreadPool(){
-    {
-        std::lock_guard<std::mutex> lock(queueMutex);
-        stopThreads = true; // Signal threads to stop
-    }
-    condition.notify_all(); // Wake up all threads to let them exit
-    for(std::thread& thread : workerThreads){
-        if(thread.joinable()){
-            thread.join(); // Wait for all threads to finish
-        }
-    }
-}
-
-void World::processMainThreadTasks(){
-
-    const double MAX_UPLOAD_TIME_MS = 2.0;
-    auto startTime = std::chrono::high_resolution_clock::now();
-
-    while(true){
-        std::function<void()> task;
-        {
-            std::lock_guard<std::mutex> lock(mainThreadQueueMutex);
-            if(mainThreadTasks.empty()) break; // No more tasks to process
-            task = std::move(mainThreadTasks.front());
-            mainThreadTasks.pop();
-        }
-        task(); // Execute the task
-
-        auto currentTime = std::chrono::high_resolution_clock::now();
-        double elapsedTime = std::chrono::duration<double, std::milli>(currentTime - startTime).count();
-
-        // If we ran out of time, stop uploading and save the rest for the next frame
-        if (elapsedTime >= MAX_UPLOAD_TIME_MS) {
-            break; 
-        }        
-    }
-}
-
 // NOTE
 // when u call getBlock, if the region of the function call has not locked chunkMap, use a shared_lock to call this function
 // if the function call region has already locked chunkMap with a shared_lock, then just call this function without locking again
@@ -91,7 +34,7 @@ glm::ivec3 World::getChunkOrigin(glm::ivec3 blockPosition) {
 }
 
 void World::setBlock(glm::ivec3 blockPosition, int type) {
-    std::unique_lock<std::shared_mutex> writeLock(chunkMapMutex);
+    std::unique_lock<std::shared_mutex> writeLock(chunkMapMutex); 
 
     glm::ivec3 chunkCoord = getChunkOrigin(blockPosition);
 
@@ -158,14 +101,12 @@ void World::generateChunks(glm::vec3 playerPosition) {
     });    
 
     if (!chunksToGenerate.empty()) {
-        std::lock_guard<std::mutex> lock(queueMutex);
         for (const auto& chunkOrigin : chunksToGenerate) {
-            taskQueue.push_back([this, chunkOrigin]{
+            threadpool->enqueueWorkerTask([this, chunkOrigin]{
                 generateChunkData(chunkOrigin);
             });
         }
     }    
-    condition.notify_all(); 
 }
 
 void World::generateChunkData(glm::ivec3 chunkOrigin) {
@@ -197,13 +138,10 @@ void World::generateChunkData(glm::ivec3 chunkOrigin) {
         chunkMap[chunkOrigin] = std::move(currentChunk);
     }    
 
-    {
-        std::lock_guard<std::mutex> lock(queueMutex);
-        taskQueue.push_back([this, chunkOrigin]{
-            calculateChunkMesh(chunkOrigin);
-        });
-    } // get out when ur done with the lock so we dont block other threads from pushing tasks while we calculate the mesh
-    condition.notify_one(); // Notify one worker thread that there's a new task    
+    
+    threadpool->enqueueWorkerTask([this, chunkOrigin]{
+        calculateChunkMesh(chunkOrigin);
+    });
 }
 
 void World::calculateChunkAndNeighborsMesh(glm::ivec3 block) {
@@ -236,13 +174,9 @@ void World::calculateChunkAndNeighborsMesh(glm::ivec3 block) {
     }
 
     for (const auto& coord : chunksToRemesh) {
-        {
-            std::lock_guard<std::mutex> lock(queueMutex);
-            taskQueue.push_back([this, coord]{
-                calculateChunkMesh(coord);
-            });
-        }
-        condition.notify_one();
+        threadpool->enqueueWorkerTask([this, coord]{
+            calculateChunkMesh(coord);
+        });
     }
 }
 
@@ -320,12 +254,9 @@ void World::calculateChunkMesh(glm::ivec3 chunkCoord) {
         
     }
 
-    {
-        std::lock_guard<std::mutex> mainLock(mainThreadQueueMutex);
-        mainThreadTasks.push([this, chunkCoord, meshData = std::move(meshData)]() mutable {
-            uploadChunkMesh(chunkCoord, std::move(meshData));
-        });
-    }
+    threadpool->enqueueMainTask([this, chunkCoord, meshData = std::move(meshData)]() mutable {
+        uploadChunkMesh(chunkCoord, meshData);
+    });
 }
 
 void World::uploadChunkMesh(glm::ivec3 chunkCoord, std::vector<float> meshData) {
@@ -379,7 +310,7 @@ uint8_t World::getVisibleFaces(glm::ivec3 block) {
     return visibleFaces;
 }
 
-void World::init(glm::vec3& playerPosition) {
+void World::init(glm::vec3& playerPosition, Threadpool* threadpoolPtr) {
     // Configure the noise generator
     noise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
     noise.SetFractalType(FastNoiseLite::FractalType_FBm);
@@ -392,17 +323,13 @@ void World::init(glm::vec3& playerPosition) {
     // Position the player above the terrain at (0,0)
     playerPosition = glm::vec3(0.0f, (noise.GetNoise(0.0f, 0.0f) + 1. * amplitude) + 3.0f, 0.0f);
 
-    // Initialize the thread pool before generating terrain
-    initThreadPool();
+    threadpool = threadpoolPtr;
 
     // Generate the initial terrain around the player
     generateChunks(playerPosition);       
 }
 
 void World::cleanup() {
-    // join worker threads
-    cleanupThreadPool();
-
     // Delete all OpenGL objects
     for (auto& pair : chunkVboMap) glDeleteBuffers(1, &pair.second);
     for (auto& pair : chunkVaoMap) glDeleteVertexArrays(1, &pair.second);

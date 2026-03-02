@@ -30,6 +30,9 @@ private:
     Collision m_collision;
     Physics m_physics;
     Renderer m_renderer;
+    
+    // Threadpool
+    Threadpool m_threadpool;
 
     // Window and Timing
     GLFWwindow* m_window = nullptr;
@@ -74,6 +77,7 @@ private:
     void initGlad();
     void initWorld(); 
     void initRenderer(); 
+    void initThreadpool();
 
     // Callback Methods
     void onMouseMovement(double xpos, double ypos);

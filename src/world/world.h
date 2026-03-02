@@ -8,6 +8,7 @@
 #include <core/constants.h>
 #include <core/utils.h>
 #include <renderer/renderer.h>
+#include <threadpool/threadpool.h>
 #include <chrono>
 #include <queue>
 #include <thread>
@@ -48,7 +49,7 @@ class World {
         int XZ_LOAD_DIST = XZ_RENDER_DIST+1;     
         
         // Lifecycle
-        void init(glm::vec3& playerPosition);
+        void init(glm::vec3& playerPosition, Threadpool* threadpoolPtr);
         void cleanup();
         
         // Accessors
@@ -63,19 +64,8 @@ class World {
         void calculateChunkMesh(glm::ivec3 chunkCoord);
         void uploadChunkMesh(glm::ivec3 chunkCoord, std::vector<float> meshData);        
 
-        // Threadpool
-        std::vector<std::thread> workerThreads;
-        std::deque<std::function<void()>> taskQueue;
-        std::mutex queueMutex;
-        std::condition_variable condition;
-        bool stopThreads = false;
-        void initThreadPool();
-        void cleanupThreadPool();
+        std::shared_mutex chunkMapMutex; // chunkMap shared mutex
 
-        std::queue<std::function<void()>> mainThreadTasks;
-        std::mutex mainThreadQueueMutex;
-        std::shared_mutex chunkMapMutex; 
-        void processMainThreadTasks();
         
     private:        
         // World Data
@@ -95,6 +85,8 @@ class World {
 
         // Helpers
         uint8_t getVisibleFaces(glm::ivec3 block);
+
+        Threadpool* threadpool;
     };
     
     
