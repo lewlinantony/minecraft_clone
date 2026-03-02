@@ -123,15 +123,23 @@ void Renderer::render(glm::ivec3 selectedBlock, Camera& camera, Player& player, 
     glm::mat4 view = camera.getViewMatrix();
     glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)curWidth / (float)curHeight, 0.1f, 5000.0f);
     
+    frustum.update(projection * view);
+
+    glm::mat4 renderView = view;
+    glm::mat4 renderProjection = projection;
 
     // Update frustum each frame
     if (!frozenFrustum) {
-        frustum.update(projection * view);
+        renderView = glm::lookAt(
+            glm::vec3(player.position.x, player.position.y + 500.0f, player.position.z + 1.0f), // Eye (slight Z offset prevents gimble lock)
+            player.position, // Target
+            glm::vec3(0.0f, 1.0f, 0.0f) // Up vector
+        );
     } 
 
     // --- Render World Chunks ---
     chunkShader->use();
-    chunkShader->setMat4("view", view);
+    chunkShader->setMat4("view", renderView);
     chunkShader->setMat4("projection", projection);
     chunkShader->setMat4("model", glm::mat4(1.0f));
 
