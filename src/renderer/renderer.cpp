@@ -211,7 +211,7 @@ void Renderer::render(glm::ivec3 selectedBlock, Camera& camera, Player& player, 
     }
 }
 
-void Renderer::renderImGui(Player& player, World& world, float* updateTimes, float* renderTimes, int timeIndex) {
+void Renderer::renderImGui(Player& player, World& world, float* updateTimes, float* renderTimes, float* queueSizes, int timeIndex) {
     // Start the Dear ImGui frame
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -245,8 +245,10 @@ void Renderer::renderImGui(Player& player, World& world, float* updateTimes, flo
     ImGui::Spacing();
     ImGui::SeparatorText("Profiling"); // specific ImGui widget for headers
     // Make graphs slightly shorter (height=60) to save screen space
-    ImGui::PlotLines("Update", updateTimes, 100, timeIndex, nullptr, 0.0f, 20.0f, ImVec2(300, 50));
+    ImGui::PlotLines("Main Thread", updateTimes, 100, timeIndex, nullptr, 0.0f, 20.0f, ImVec2(300, 50));
 
+    ImGui::PlotLines("Worker Threads", queueSizes, 100, timeIndex, nullptr, 0.0f, 500.0f, ImVec2(300, 50));
+    
     ImGui::PlotLines("Render", renderTimes, 100, timeIndex, nullptr, 0.0f, 20.0f, ImVec2(300, 50)); 
     
     ImGui::End();

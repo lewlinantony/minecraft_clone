@@ -157,7 +157,7 @@ void Game::update() {
 
 void Game::render() {
     m_renderer.render(m_selectedBlock, m_camera, m_player, m_world, m_window);
-    m_renderer.renderImGui(m_player, m_world, m_updateTimes, m_renderTimes, m_timeIndex);
+    m_renderer.renderImGui(m_player, m_world, m_updateTimes, m_renderTimes, m_queueSizes, m_timeIndex);
 }
 
 void Game::performRaycasting() {
@@ -350,10 +350,16 @@ void Game::run() {
         auto endRender = std::chrono::high_resolution_clock::now();
 
         // Store update and render times for imgui graph
-        float updateTime = std::chrono::duration<float, std::milli>(endUpdate - startUpdate).count();
+        float mainTime = std::chrono::duration<float, std::milli>(endUpdate - startUpdate).count();
         float renderTime = std::chrono::duration<float, std::milli>(endRender - startRender).count();
-        m_updateTimes[m_timeIndex] = updateTime;
+        m_updateTimes[m_timeIndex] = mainTime;
         m_renderTimes[m_timeIndex] = renderTime;
+        size_t queueSize;
+        {
+            std::lock_guard<std::mutex> lock(m_world.queueMutex);
+            queueSize = m_world.taskQueue.size();
+        } 
+        m_queueSizes[m_timeIndex] = static_cast<float>(queueSize);
         m_timeIndex = (m_timeIndex + 1) % 100;
 
         glfwSwapBuffers(m_window);

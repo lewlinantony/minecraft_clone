@@ -38,6 +38,7 @@ private:
 
     float m_updateTimes[100] = {0};
     float m_renderTimes[100] = {0};
+    float m_queueSizes[100] = {0};
     int m_timeIndex = 0;    
     
     bool m_playerMovedChunks = false; 

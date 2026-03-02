@@ -29,7 +29,7 @@ class Renderer {
 
         // Render Functions
         void render(glm::ivec3 selectedBlock, Camera& camera, Player& player, World& world, GLFWwindow* window); 
-        void renderImGui(Player& player, World& world, float* updateTimes, float* renderTimes, int timeIndex);         
+        void renderImGui(Player& player, World& world, float* updateTimes, float* renderTimes, float* queueSizes, int timeIndex);         
         
         // Lifecycle
         void init(GLFWwindow* window);
