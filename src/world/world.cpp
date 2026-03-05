@@ -102,7 +102,7 @@ void World::generateChunks(glm::vec3 playerPosition) {
 
     if (!chunksToGenerate.empty()) {
         for (const auto& chunkOrigin : chunksToGenerate) {
-            threadpool->enqueueWorkerTask([this, chunkOrigin]{
+            threadpool->enqueueBackWorkerTask([this, chunkOrigin]{
                 generateChunkData(chunkOrigin);
             });
         }
@@ -139,7 +139,7 @@ void World::generateChunkData(glm::ivec3 chunkOrigin) {
     }    
 
     
-    threadpool->enqueueWorkerTask([this, chunkOrigin]{
+    threadpool->enqueueBackWorkerTask([this, chunkOrigin]{
         calculateChunkMesh(chunkOrigin);
     });
 }
@@ -174,7 +174,7 @@ void World::calculateChunkAndNeighborsMesh(glm::ivec3 block) {
     }
 
     for (const auto& coord : chunksToRemesh) {
-        threadpool->enqueueWorkerTask([this, coord]{
+        threadpool->enqueueFrontWorkerTask([this, coord]{
             calculateChunkMesh(coord);
         });
     }

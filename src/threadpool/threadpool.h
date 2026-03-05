@@ -15,7 +15,8 @@ class Threadpool{
         void cleanup();
         void processMainThreadTasks();
         
-        void enqueueWorkerTask(std::function<void()> task);
+        void enqueueBackWorkerTask(std::function<void()> task);
+        void enqueueFrontWorkerTask(std::function<void()> task);
         size_t getWorkerQueueSize();
 
         void enqueueMainTask(std::function<void()> task);        

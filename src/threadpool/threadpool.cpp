@@ -57,10 +57,18 @@ void Threadpool::processMainThreadTasks(){
     }
 }
 
-void Threadpool::enqueueWorkerTask(std::function<void()> task){
+void Threadpool::enqueueBackWorkerTask(std::function<void()> task){
     {
         std::lock_guard<std::mutex> lock(workerQueueMutex);
         workerTaskQueue.push_back(std::move(task));
+    }
+    condition.notify_one(); // Notify one worker thread that there's a new task    
+}
+
+void Threadpool::enqueueFrontWorkerTask(std::function<void()> task){
+    {
+        std::lock_guard<std::mutex> lock(workerQueueMutex);
+        workerTaskQueue.push_front(std::move(task));
     }
     condition.notify_one(); // Notify one worker thread that there's a new task    
 }

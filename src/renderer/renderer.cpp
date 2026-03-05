@@ -245,9 +245,9 @@ void Renderer::renderImGui(Player& player, World& world, float* updateTimes, flo
     ImGui::Spacing();
     ImGui::SeparatorText("Profiling"); // specific ImGui widget for headers
     // Make graphs slightly shorter (height=60) to save screen space
-    ImGui::PlotLines("Main Thread", updateTimes, 100, timeIndex, nullptr, 0.0f, 20.0f, ImVec2(300, 50));
+    ImGui::PlotLines("Main", updateTimes, 100, timeIndex, nullptr, 0.0f, 20.0f, ImVec2(300, 50));
 
-    ImGui::PlotLines("Worker Threads", queueSizes, 100, timeIndex, nullptr, 0.0f, 500.0f, ImVec2(300, 50));
+    ImGui::PlotLines("Workers", queueSizes, 100, timeIndex, nullptr, 0.0f, FLT_MAX, ImVec2(300, 50));
     
     ImGui::PlotLines("Render", renderTimes, 100, timeIndex, nullptr, 0.0f, 20.0f, ImVec2(300, 50)); 
     
