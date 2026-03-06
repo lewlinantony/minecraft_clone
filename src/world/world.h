@@ -70,7 +70,8 @@ class World {
     private:        
         // World Data
         std::unordered_map<glm::ivec3, Chunk> chunkMap;
-        
+
+        void populateChunkPadding(glm::ivec3 chunkCoord);        
         
         // Noise Parameters
         FastNoiseLite noise;

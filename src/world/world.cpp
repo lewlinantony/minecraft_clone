@@ -181,6 +181,68 @@ void World::calculateChunkAndNeighborsMesh(glm::ivec3 block) {
     }
 }
 
+void World::populateChunkPadding(glm::ivec3 chunkCoord){
+    Chunk& chunk = chunkMap.at(chunkCoord); 
+
+    const glm::ivec3 neighbourChunks[6] = {
+        chunkCoord + glm::ivec3(CHUNK_SIZE, 0, 0),    // Left
+        chunkCoord + glm::ivec3(-CHUNK_SIZE, 0, 0),   // Right
+        chunkCoord + glm::ivec3(0, CHUNK_SIZE, 0),    // Top
+        chunkCoord + glm::ivec3(0, -CHUNK_SIZE, 0),    // Bottom
+        chunkCoord + glm::ivec3(0, 0, CHUNK_SIZE),    // Back
+        chunkCoord + glm::ivec3(0, 0, -CHUNK_SIZE)   // Front
+    };
+
+    auto it = chunkMap.find(neighbourChunks[0]);
+    if (it != chunkMap.end()) {
+        Chunk& neighbor = it->second;
+        for(int y=1; y<CHUNK_SIZE+1; y++) {
+            std::memcpy(&chunk.blocks[CHUNK_SIZE+1][y][1], &neighbor.blocks[1][y][1], CHUNK_SIZE * sizeof(Block));                
+        }
+    }
+
+    auto it = chunkMap.find(neighbourChunks[1]);
+    if (it != chunkMap.end()) {
+        Chunk& neighbor = it->second;
+        for(int y=1; y<CHUNK_SIZE+1; y++) {
+            std::memcpy(&chunk.blocks[0][y][1], &neighbor.blocks[CHUNK_SIZE][y][1], CHUNK_SIZE * sizeof(Block));                
+        }
+    }   
+
+    auto it = chunkMap.find(neighbourChunks[2]);
+    if (it != chunkMap.end()) {
+        Chunk& neighbor = it->second;
+        for(int x=1; x<CHUNK_SIZE+1; x++) {
+            std::memcpy(&chunk.blocks[x][CHUNK_SIZE+1][1], &neighbor.blocks[x][1][1], CHUNK_SIZE * sizeof(Block));
+        }
+    }
+
+    auto it = chunkMap.find(neighbourChunks[3]);
+    if (it != chunkMap.end()) {
+        Chunk& neighbor = it->second;
+        for(int x=1; x<CHUNK_SIZE+1; x++) {
+            std::memcpy(&chunk.blocks[x][0][1], &neighbor.blocks[x][CHUNK_SIZE][1], CHUNK_SIZE * sizeof(Block));
+        }
+    }
+
+    if (chunkMap.find(neighbourChunks[4]) != chunkMap.end()) {
+        for(int x=1; x<CHUNK_SIZE+1; x++) {
+            for(int y=1; y<CHUNK_SIZE+1; y++) {
+                chunk.blocks[x][y][CHUNK_SIZE+1] = chunkMap.at(neighbourChunks[4]).blocks[x][y][1];
+            }
+        }
+    }
+
+    if (chunkMap.find(neighbourChunks[5]) != chunkMap.end()) {
+        for(int x=1; x<CHUNK_SIZE+1; x++) {
+            for(int y=1; y<CHUNK_SIZE+1; y++) {
+                chunk.blocks[x][y][0] = chunkMap.at(neighbourChunks[5]).blocks[x][y][CHUNK_SIZE];
+            }
+        }
+    }
+    
+}
+
 void World::calculateChunkMesh(glm::ivec3 chunkCoord) {
     
     std::vector<float> meshData;
@@ -195,6 +257,8 @@ void World::calculateChunkMesh(glm::ivec3 chunkCoord) {
         }
 
         Chunk& chunk = chunkMap.at(chunkCoord);
+
+        populateChunkPadding(chunkCoord); // Fill the padding layer of the chunks
 
         const glm::vec3 normals[6] = {
             glm::vec3(0.0f, 1.0f, 0.0f),    // Top (+Y)
