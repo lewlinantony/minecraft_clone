@@ -5,7 +5,7 @@
 constexpr int SCREEN_WIDTH = 800;
 constexpr int SCREEN_HEIGHT = 600;
 constexpr float BLOCK_SIZE = 1.0f; 
-constexpr int CHUNK_SIZE = 8;
+constexpr int CHUNK_SIZE = 32;
 
 // face coords
 inline constexpr float topFace[] = {

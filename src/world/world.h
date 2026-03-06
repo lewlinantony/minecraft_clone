@@ -23,13 +23,13 @@ class Player;
 
 // BLOCK
 struct Block{
-    int type = 0; // 0 for air
+    int type = 0; // 0 for a
 };
 
 
 // CHUNK
 struct Chunk {
-    Block blocks[CHUNK_SIZE][CHUNK_SIZE][CHUNK_SIZE];
+    Block blocks[CHUNK_SIZE+2][CHUNK_SIZE+2][CHUNK_SIZE+2]; // +2 for easier face visibility checks without needing to worry about chunk boundaries
 };
 
 
@@ -45,7 +45,7 @@ class World {
 
         // Render and Load Distances
         int Y_LIMIT = 4; // Vertical world limit in chunks (total height in blocks = Y_LIMIT*CHUNK_SIZE)
-        int XZ_RENDER_DIST = 25;
+        int XZ_RENDER_DIST = 8;
         int XZ_LOAD_DIST = XZ_RENDER_DIST+1;     
         
         // Lifecycle

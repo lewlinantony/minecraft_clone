@@ -15,10 +15,10 @@ Block* World::getBlock(glm::ivec3 blockPosition) {
     }
     
     // Chunk exists, now get the block's local position
-    glm::ivec3 localPos = blockPosition - chunkCoord;
-    if (localPos.x < 0 || localPos.x >= CHUNK_SIZE ||
-        localPos.y < 0 || localPos.y >= CHUNK_SIZE ||
-        localPos.z < 0 || localPos.z >= CHUNK_SIZE){ 
+    glm::ivec3 localPos = blockPosition - chunkCoord + glm::ivec3(1); // +1 to account for the padding in the Chunk
+    if (localPos.x < 1 || localPos.x > CHUNK_SIZE ||
+        localPos.y < 1 || localPos.y > CHUNK_SIZE ||
+        localPos.z < 1 || localPos.z > CHUNK_SIZE){ 
         return nullptr;
     }
 
@@ -41,7 +41,7 @@ void World::setBlock(glm::ivec3 blockPosition, int type) {
     // Find the chunk in the map. If it exists, modify it.
     auto it = chunkMap.find(chunkCoord);
     if (it != chunkMap.end()) {
-        glm::ivec3 localPos = blockPosition - chunkCoord;
+        glm::ivec3 localPos = blockPosition - chunkCoord + glm::ivec3(1); // +1 to account for the padding in the Chunk
         it->second.blocks[localPos.x][localPos.y][localPos.z].type = type;
     }
 }
@@ -111,14 +111,14 @@ void World::generateChunks(glm::vec3 playerPosition) {
 
 void World::generateChunkData(glm::ivec3 chunkOrigin) {
     Chunk currentChunk;
-    for (int x = 0; x < CHUNK_SIZE; x++) {
-        for (int z = 0; z < CHUNK_SIZE; z++) {
+    for (int x = 1; x < CHUNK_SIZE+1; x++) {
+        for (int z = 1; z < CHUNK_SIZE+1; z++) {
             float globalX = (float)(chunkOrigin.x + x);
             float globalZ = (float)(chunkOrigin.z + z);
             float height = noise.GetNoise(globalX, globalZ) * amplitude; // Scale noise to 0-2*amp
             height = glm::round(height);
 
-            for (int y = 0; y < CHUNK_SIZE; y++) {
+            for (int y = 1; y < CHUNK_SIZE+1; y++) {
                 int globalY = chunkOrigin.y + y;
                 if (globalY > height) {
                     currentChunk.blocks[x][y][z].type = 0; // Air
@@ -173,6 +173,7 @@ void World::calculateChunkAndNeighborsMesh(glm::ivec3 block) {
         chunksToRemesh.push_back(chunkCoord + glm::ivec3(0, 0, CHUNK_SIZE));
     }
 
+    // although it keeps the main thread smooth, it can often causes like hole in the chunk mesh for a split second which is noticable
     for (const auto& coord : chunksToRemesh) {
         threadpool->enqueueFrontWorkerTask([this, coord]{
             calculateChunkMesh(coord);
@@ -183,10 +184,9 @@ void World::calculateChunkAndNeighborsMesh(glm::ivec3 block) {
 void World::calculateChunkMesh(glm::ivec3 chunkCoord) {
     
     std::vector<float> meshData;
-    meshData.reserve(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE * 6 * 10); // Reserve space for worst case (all blocks visible, 6 faces each, 10 floats per vertex)
+    meshData.reserve((CHUNK_SIZE+2) * (CHUNK_SIZE+2) * (CHUNK_SIZE+2) * 6 * 10); // Reserve space for worst case (all blocks visible, 6 faces each, 10 floats per vertex)
 
     {
-
         std::shared_lock<std::shared_mutex> lock(chunkMapMutex);
 
         // Ensure the chunk exists in the map
@@ -206,9 +206,9 @@ void World::calculateChunkMesh(glm::ivec3 chunkCoord) {
         };    
 
 
-        for (int x = 0; x < CHUNK_SIZE; x++) {
-            for (int y = 0; y < CHUNK_SIZE; y++) {
-                for (int z = 0; z < CHUNK_SIZE; z++) {
+        for (int x = 1; x < CHUNK_SIZE+1; x++) {
+            for (int y = 1; y < CHUNK_SIZE+1; y++) {
+                for (int z = 1; z < CHUNK_SIZE+1; z++) {
                     if (chunk.blocks[x][y][z].type == 0) continue; // Skip air blocks
 
                     glm::ivec3 blockPosition = chunkCoord + glm::ivec3(x, y, z);
