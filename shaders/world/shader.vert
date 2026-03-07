@@ -6,8 +6,8 @@ layout (location = 3) in float aBlockType;
 layout (location = 4) in vec3 aNormal; // New normal attribute
 
 out vec2 TexCoord;
-out float FaceID;
-out float blockType;
+flat out float FaceID; // flat cause, no interpolation needed and below
+flat out float blockType;
 
 // Outputs for lighting
 out vec3 FragPos;

@@ -17,15 +17,13 @@ void main()
 
     vec2 atlasPos;
     if (blockType == 1) { // Grass
-        if (int(FaceID) == 0) { // Top
-            atlasPos = vec2(0.0, 0.0);
-        }
-        else if (int(FaceID) == 1 || int(FaceID) == 2 || int(FaceID) == 3 || int(FaceID) == 4) {  // Sides
-            atlasPos = vec2(1.0, 0.0);
-        }
-        else{ // Bottom
-            atlasPos = vec2(2.0, 0.0);
-        }
+        if (FaceID == 2.0) { 
+            atlasPos = vec2(0.0, 0.0); // Top 
+        } else if (FaceID == 3.0) {
+            atlasPos = vec2(2.0, 0.0); // Bottom 
+        } else {
+            atlasPos = vec2(1.0, 0.0); // Sides (0.0, 1.0, 4.0, 5.0) 
+        }     
     }
     else if (blockType == 2){ //Dirt
         atlasPos = vec2(2.0f, 0.0f);

@@ -4,8 +4,8 @@ out vec4 FragColor;
 
 // Attributes from Vertex Shader
 in vec2 TexCoord;
-in float FaceID;
-in float blockType;
+flat in float FaceID;
+flat in float blockType;
 in vec3 FragPos; // World space position
 in vec3 Normal;  // World space normal
 
@@ -26,9 +26,13 @@ void main()
 
     vec2 atlasPos;
     if (blockType == 1.0) { // Grass
-        if (FaceID == 0.0) atlasPos = vec2(0.0, 0.0);      // Top
-        else if (FaceID >= 1.0 && FaceID <= 4.0) atlasPos = vec2(1.0, 0.0); // Sides
-        else atlasPos = vec2(2.0, 0.0);                    // Bottom
+        if (FaceID == 2.0) { 
+            atlasPos = vec2(0.0, 0.0); // Top 
+        } else if (FaceID == 3.0) {
+            atlasPos = vec2(2.0, 0.0); // Bottom 
+        } else {
+            atlasPos = vec2(1.0, 0.0); // Sides (0.0, 1.0, 4.0, 5.0) 
+        }                 
     } else if (blockType == 2.0) { // Dirt
         atlasPos = vec2(2.0, 0.0);
     } else if (blockType == 3.0) { // Stone

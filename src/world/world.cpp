@@ -181,12 +181,20 @@ void World::calculateChunkAndNeighborsMesh(glm::ivec3 block) {
 }
 
 void World::calculateChunkMesh(glm::ivec3 chunkCoord) {
+
+    const glm::vec3 normals[6] = {
+        glm::vec3(1.0f, 0.0f, 0.0f),    // Right (+X)
+        glm::vec3(-1.0f, 0.0f, 0.0f),   // Left (-X)
+        glm::vec3(0.0f, 1.0f, 0.0f),    // Top (+Y)
+        glm::vec3(0.0f, -1.0f, 0.0f),   // Bottom (-Y)
+        glm::vec3(0.0f, 0.0f, 1.0f),    // Back (+Z)
+        glm::vec3(0.0f, 0.0f, -1.0f)    // Front (-Z)
+    };  
     
     std::vector<float> meshData;
-    meshData.reserve(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE * 6 * 10); // Reserve space for worst case (all blocks visible, 6 faces each, 10 floats per vertex)
+    meshData.reserve(50000); // Reserve space for worst case (all blocks visible, 6 faces each, 10 floats per vertex)
 
     {
-
         std::shared_lock<std::shared_mutex> lock(chunkMapMutex);
 
         // Ensure the chunk exists in the map
@@ -196,67 +204,364 @@ void World::calculateChunkMesh(glm::ivec3 chunkCoord) {
 
         Chunk& chunk = chunkMap.at(chunkCoord);
 
-        const glm::vec3 normals[6] = {
-            glm::vec3(0.0f, 1.0f, 0.0f),    // Top (+Y)
-            glm::vec3(0.0f, 0.0f, -1.0f),   // Front (-Z)
-            glm::vec3(-1.0f, 0.0f, 0.0f),   // Right (-X)
-            glm::vec3(0.0f, 0.0f, 1.0f),    // Back (+Z)
-            glm::vec3(1.0f, 0.0f, 0.0f),    // Left (+X)
-            glm::vec3(0.0f, -1.0f, 0.0f)    // Bottom (-Y)
-        };    
+        // populateChunkPadding(chunk, chunkCoord); // Populate the padding of the chunk with neighboring chunk data for correct face visibility checks
 
+        u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2] = {0}; // +2 for the padding
+        u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2] = {0};
+        u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2] = {0};
 
-        for (int x = 0; x < CHUNK_SIZE; x++) {
-            for (int y = 0; y < CHUNK_SIZE; y++) {
-                for (int z = 0; z < CHUNK_SIZE; z++) {
-                    if (chunk.blocks[x][y][z].type == 0) continue; // Skip air blocks
-
-                    glm::ivec3 blockPosition = chunkCoord + glm::ivec3(x, y, z);
-                    uint8_t faces = getVisibleFaces(blockPosition); // Get visible faces bitmask for this block
-
-                    for (int faceID=0; faceID<6; faceID++) {
-                        
-                        if ((faces & (1 << faceID)) == 0) continue; // This face is not visible, skip it
-
-                        const float* curFace = faceVertices[faceID];
-                        if (!curFace) continue;
-
-                        const glm::vec3 normal = normals[faceID];
-
-                        for (int i = 0; i < 6; ++i) { // 6 vertices per face
-                            int idx = i * 6; // 6 attributes per vertex in face data
-
-                            // Vertex position 
-                            float vx = curFace[idx + 0] + blockPosition.x;
-                            float vy = curFace[idx + 1] + blockPosition.y;
-                            float vz = curFace[idx + 2] + blockPosition.z;
-
-                            // Texture coordinates
-                            float ux = curFace[idx + 3];
-                            float uy = curFace[idx + 4];
-                            
-                            // Face ID and Block Type
-                            float fid = curFace[idx + 5];
-                            float blockType = static_cast<float>(chunk.blocks[x][y][z].type);
-
-                            meshData.insert(meshData.end(), {
-                                vx, vy, vz,           // Position
-                                ux, uy,               // UV Coords
-                                fid,                  // Face ID
-                                blockType,            // Block Type
-                                normal.x, normal.y, normal.z // Normal
-                            });
-                        }
+        // create bitmask representation of chunk, where 1 represents a solid block, 0 represents air
+        for(int x=0; x<CHUNK_SIZE; x++){
+            for(int y=0; y<CHUNK_SIZE; y++){
+                for(int z=0; z<CHUNK_SIZE; z++){
+                    if (chunk.blocks[x][y][z].type != 0) {
+                        x_solid_mask[y+1][z+1] |= (1ULL << (x+1)); // +1 for padding offset
+                        y_solid_mask[x+1][z+1] |= (1ULL << (y+1)); // +1 for padding offset
+                        z_solid_mask[x+1][y+1] |= (1ULL << (z+1)); // +1 for padding offset
                     }
                 }
             }
         }
+
+        const glm::ivec3 neighbourChunks[6] = {
+            chunkCoord + glm::ivec3(CHUNK_SIZE, 0, 0),    // Right
+            chunkCoord + glm::ivec3(-CHUNK_SIZE, 0, 0),   // Left
+            chunkCoord + glm::ivec3(0, CHUNK_SIZE, 0),    // Top
+            chunkCoord + glm::ivec3(0, -CHUNK_SIZE, 0),    // Bottom
+            chunkCoord + glm::ivec3(0, 0, CHUNK_SIZE),    // Back
+            chunkCoord + glm::ivec3(0, 0, -CHUNK_SIZE)   // Front
+        };
+
+        glm::ivec3 rightNeightbour = neighbourChunks[0];
+        auto it = chunkMap.find(rightNeightbour);
+        if (it != chunkMap.end()) {
+            for(int y=0; y<CHUNK_SIZE; y++){
+                for(int z=0; z<CHUNK_SIZE; z++){
+                    if (it->second.blocks[0][y][z].type != 0) {
+                        x_solid_mask[y+1][z+1] |= (1ULL << (CHUNK_SIZE+1)); // 0th index of neighbour goes in CHUNK_SIZE+1 index of current chunk's mask padding
+                    }
+                }
+            }
+        }   
+
+        glm::ivec3 leftNeightbour = neighbourChunks[1];
+        it = chunkMap.find(leftNeightbour);
+        if (it != chunkMap.end()) {
+            for(int y=0; y<CHUNK_SIZE; y++){
+                for(int z=0; z<CHUNK_SIZE; z++){
+                    if (it->second.blocks[CHUNK_SIZE-1][y][z].type != 0) {
+                        x_solid_mask[y+1][z+1] |= (1ULL << 0); // CHUNK_SIZE-1 index of neighbour goes in 0th index of current chunk's mask padding
+                    }
+                }
+            }
+        }
+
+        glm::ivec3 topNeightbour = neighbourChunks[2];
+        it = chunkMap.find(topNeightbour);
+        if (it != chunkMap.end()) {
+            for(int x=0; x<CHUNK_SIZE; x++){
+                for(int z=0; z<CHUNK_SIZE; z++){
+                    if (it->second.blocks[x][0][z].type != 0) {
+                        y_solid_mask[x+1][z+1] |= (1ULL << (CHUNK_SIZE+1)); 
+                    }
+                }
+            }
+        }
+
+        glm::ivec3 bottomNeightbour = neighbourChunks[3];
+        it = chunkMap.find(bottomNeightbour);
+        if (it != chunkMap.end()) {
+            for(int x=0; x<CHUNK_SIZE; x++){
+                for(int z=0; z<CHUNK_SIZE; z++){
+                    if (it->second.blocks[x][CHUNK_SIZE-1][z].type != 0) {
+                        y_solid_mask[x+1][z+1] |= (1ULL << 0); 
+                    }
+                }
+            }
+        }
+
+        glm::ivec3 backNeightbour = neighbourChunks[4];
+        it = chunkMap.find(backNeightbour);
+        if (it != chunkMap.end()) {
+            for(int x=0; x<CHUNK_SIZE; x++){
+                for(int y=0; y<CHUNK_SIZE; y++){
+                    if (it->second.blocks[x][y][0].type != 0) {
+                        z_solid_mask[x+1][y+1] |= (1ULL << (CHUNK_SIZE+1)); 
+                    }
+                }
+            }
+        }
+
+        glm::ivec3 frontNeightbour = neighbourChunks[5];
+        it = chunkMap.find(frontNeightbour);
+        if (it != chunkMap.end()) {
+            for(int x=0; x<CHUNK_SIZE; x++){
+                for(int y=0; y<CHUNK_SIZE; y++){
+                    if (it->second.blocks[x][y][CHUNK_SIZE-1].type != 0) {
+                        z_solid_mask[x+1][y+1] |= (1ULL << 0); 
+                    }
+                }
+            }
+        }
+
+        u_int64_t FILTER = ((1ULL << CHUNK_SIZE) - 1) << 1; // Mask to ignore the padding bits (0 and CHUNK_SIZE+1)
         
+        for(int y=1; y<CHUNK_SIZE+1; y++){
+            for(int z=1; z<CHUNK_SIZE+1; z++){
+
+                uint64_t row = x_solid_mask[y][z];
+
+                uint64_t rightVisible = (row & ~(row >> 1)) & FILTER;
+                uint64_t leftVisible  = (row & ~(row << 1)) & FILTER;
+
+                while(rightVisible){
+                    int bit_index = __builtin_ctzll(rightVisible); // Count trailing zeros to find the index of the least significant set bit
+                    int x = bit_index; 
+                    int faceID = 0;
+                    const float* curFace = faceVertices[faceID];
+                    const glm::vec3 normal = normals[faceID];
+
+                    for (int i = 0; i < 6; ++i) { // 6 vertices per face
+                        int idx = i * 6; // 6 attributes per vertex in face data
+
+                        glm::ivec3 blockPos = chunkCoord + glm::ivec3(x, y, z) - glm::ivec3(1); 
+
+                        // Vertex position 
+                        float vx = curFace[idx + 0] + blockPos.x;
+                        float vy = curFace[idx + 1] + blockPos.y;
+                        float vz = curFace[idx + 2] + blockPos.z;
+
+                        // Texture coordinates
+                        float ux = curFace[idx + 3];
+                        float uy = curFace[idx + 4];
+                        
+                        // Face ID and Block Type
+                        float fid = curFace[idx + 5];
+                        float blockType = static_cast<float>(chunk.blocks[x-1][y-1][z-1].type);
+
+                        meshData.insert(meshData.end(), {
+                            vx, vy, vz,           // Position
+                            ux, uy,               // UV Coords
+                            fid,                  // Face ID
+                            blockType,            // Block Type
+                            normal.x, normal.y, normal.z // Normal
+                        });
+                    }                   
+                    rightVisible &= ~(1ULL << bit_index); // Clear the least significant set bit
+                }
+                
+                while(leftVisible){
+                    int bit_index = __builtin_ctzll(leftVisible); // Count trailing zeros to find the index of the least significant set bit
+                    int x = bit_index; 
+                    int faceID = 1;
+                    const float* curFace = faceVertices[faceID];
+                    const glm::vec3 normal = normals[faceID];
+
+                    for (int i = 0; i < 6; ++i) { // 6 vertices per face
+                        int idx = i * 6; // 6 attributes per vertex in face data
+
+                        glm::ivec3 blockPos = chunkCoord + glm::ivec3(x, y, z) - glm::ivec3(1); 
+
+                        // Vertex position 
+                        float vx = curFace[idx + 0] + blockPos.x;
+                        float vy = curFace[idx + 1] + blockPos.y;
+                        float vz = curFace[idx + 2] + blockPos.z;
+
+                        // Texture coordinates
+                        float ux = curFace[idx + 3];
+                        float uy = curFace[idx + 4];
+                        
+                        // Face ID and Block Type
+                        float fid = curFace[idx + 5];
+                        float blockType = static_cast<float>(chunk.blocks[x-1][y-1][z-1].type);
+
+                        meshData.insert(meshData.end(), {
+                            vx, vy, vz,           // Position
+                            ux, uy,               // UV Coords
+                            fid,                  // Face ID
+                            blockType,            // Block Type
+                            normal.x, normal.y, normal.z // Normal
+                        });
+                    }                   
+                    leftVisible &= ~(1ULL << bit_index); // Clear the least significant set bit
+                }
+            }
+        }
+        
+        for(int x=1; x<CHUNK_SIZE+1; x++){
+            for(int z=1; z<CHUNK_SIZE+1; z++){
+                uint64_t row = y_solid_mask[x][z];
+
+                uint64_t topVisible = (row & ~(row >> 1)) & FILTER;
+                uint64_t bottomVisible = (row & ~(row << 1)) & FILTER;
+
+
+                while(topVisible){
+                    int bit_index = __builtin_ctzll(topVisible);
+                    int y = bit_index;
+                    int faceID = 2;
+                    const float* curFace = faceVertices[faceID];
+                    const glm::vec3 normal = normals[faceID];
+
+                    for(int i=0; i<6; i++){
+                        int idx = i * 6; // 6 attributes per vertex in face data
+
+                        glm::ivec3 blockPos = chunkCoord + glm::ivec3(x, y, z) - glm::ivec3(1); 
+
+                        // Vertex position 
+                        float vx = curFace[idx + 0] + blockPos.x;
+                        float vy = curFace[idx + 1] + blockPos.y;
+                        float vz = curFace[idx + 2] + blockPos.z;
+
+                        // Texture coordinates
+                        float ux = curFace[idx + 3];
+                        float uy = curFace[idx + 4];
+                        
+                        // Face ID and Block Type
+                        float fid = curFace[idx + 5];
+                        float blockType = static_cast<float>(chunk.blocks[x-1][y-1][z-1].type);
+
+                        meshData.insert(meshData.end(), {
+                            vx, vy, vz,           // Position
+                            ux, uy,               // UV Coords
+                            fid,                  // Face ID
+                            blockType,            // Block Type
+                            normal.x, normal.y, normal.z // Normal
+                        });                        
+                    }
+                    topVisible &= ~(1ULL << bit_index);
+                }
+
+                while(bottomVisible){
+                    int bit_index = __builtin_ctzll(bottomVisible);
+                    int y = bit_index;
+                    int faceID = 3;
+                    const float* curFace = faceVertices[faceID];
+                    const glm::vec3 normal = normals[faceID]; 
+
+                    for (int i = 0; i < 6; ++i) { // 6 vertices per face
+                        int idx = i * 6; // 6 attributes per vertex in face data
+
+                        glm::ivec3 blockPos = chunkCoord + glm::ivec3(x, y, z) - glm::ivec3(1); 
+
+                        // Vertex position 
+                        float vx = curFace[idx + 0] + blockPos.x;
+                        float vy = curFace[idx + 1] + blockPos.y;
+                        float vz = curFace[idx + 2] + blockPos.z;
+
+                        // Texture coordinates
+                        float ux = curFace[idx + 3];
+                        float uy = curFace[idx + 4];
+                        
+                        // Face ID and Block Type
+                        float fid = curFace[idx + 5];
+                        float blockType = static_cast<float>(chunk.blocks[x-1][y-1][z-1].type);
+
+                        meshData.insert(meshData.end(), {
+                            vx, vy, vz,           // Position
+                            ux, uy,               // UV Coords
+                            fid,                  // Face ID
+                            blockType,            // Block Type
+                            normal.x, normal.y, normal.z // Normal
+                        });
+                    }   
+
+                    bottomVisible &= ~(1ULL << bit_index);
+                }
+            }
+        }
+
+        for(int x=1; x<CHUNK_SIZE+1; x++){
+            for(int y=1; y<CHUNK_SIZE+1; y++){
+                uint64_t row = z_solid_mask[x][y];
+
+                uint64_t backVisible = (row & ~(row >> 1)) & FILTER;
+                uint64_t frontVisible = (row & ~(row << 1)) & FILTER;
+
+                while(backVisible){
+                    int bit_index = __builtin_ctzll(backVisible);
+                    int z = bit_index;
+                    int faceID = 4;
+                    const float* curFace = faceVertices[faceID];
+                    const glm::vec3 normal = normals[faceID]; 
+
+                    for (int i = 0; i < 6; ++i) { // 6 vertices per face
+                        int idx = i * 6; // 6 attributes per vertex in face data
+
+                        glm::ivec3 blockPos = chunkCoord + glm::ivec3(x, y, z) - glm::ivec3(1); 
+
+                        // Vertex position 
+                        float vx = curFace[idx + 0] + blockPos.x;
+                        float vy = curFace[idx + 1] + blockPos.y;
+                        float vz = curFace[idx + 2] + blockPos.z;
+
+                        // Texture coordinates
+                        float ux = curFace[idx + 3];
+                        float uy = curFace[idx + 4];
+                        
+                        // Face ID and Block Type
+                        float fid = curFace[idx + 5];
+                        float blockType = static_cast<float>(chunk.blocks[x-1][y-1][z-1].type);
+
+                        meshData.insert(meshData.end(), {
+                            vx, vy, vz,           // Position
+                            ux, uy,               // UV Coords
+                            fid,                  // Face ID
+                            blockType,            // Block Type
+                            normal.x, normal.y, normal.z // Normal
+                        });
+                    }   
+
+                    backVisible &= ~(1ULL << bit_index);
+                }
+
+                while(frontVisible){
+                    int bit_index = __builtin_ctzll(frontVisible);
+                    int z = bit_index;
+                    int faceID = 5;
+                    const float* curFace = faceVertices[faceID];
+                    const glm::vec3 normal = normals[faceID]; 
+
+                    for (int i = 0; i < 6; ++i) { // 6 vertices per face
+                        int idx = i * 6; // 6 attributes per vertex in face data
+
+                        glm::ivec3 blockPos = chunkCoord + glm::ivec3(x, y, z) - glm::ivec3(1); 
+
+                        // Vertex position 
+                        float vx = curFace[idx + 0] + blockPos.x;
+                        float vy = curFace[idx + 1] + blockPos.y;
+                        float vz = curFace[idx + 2] + blockPos.z;
+
+                        // Texture coordinates
+                        float ux = curFace[idx + 3];
+                        float uy = curFace[idx + 4];
+                        
+                        // Face ID and Block Type
+                        float fid = curFace[idx + 5];
+                        float blockType = static_cast<float>(chunk.blocks[x-1][y-1][z-1].type);
+
+                        meshData.insert(meshData.end(), {
+                            vx, vy, vz,           // Position
+                            ux, uy,               // UV Coords
+                            fid,                  // Face ID
+                            blockType,            // Block Type
+                            normal.x, normal.y, normal.z // Normal
+                        });
+                    }   
+
+                    frontVisible &= ~(1ULL << bit_index);
+                }
+            
+            }
+        }             
     }
 
-    threadpool->enqueueMainTask([this, chunkCoord, meshData = std::move(meshData)]() mutable {
-        uploadChunkMesh(chunkCoord, meshData);
-    });
+    if (!meshData.empty()) {
+        meshData.shrink_to_fit(); 
+        threadpool->enqueueMainTask([this, chunkCoord, meshData = std::move(meshData)]() mutable {
+            uploadChunkMesh(chunkCoord, meshData);
+        });
+    }
 }
 
 void World::uploadChunkMesh(glm::ivec3 chunkCoord, std::vector<float> meshData) {

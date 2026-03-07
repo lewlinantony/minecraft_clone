@@ -45,7 +45,7 @@ class World {
 
         // Render and Load Distances
         int Y_LIMIT = 4; // Vertical world limit in chunks (total height in blocks = Y_LIMIT*CHUNK_SIZE)
-        int XZ_RENDER_DIST = 25;
+        int XZ_RENDER_DIST = 30;
         int XZ_LOAD_DIST = XZ_RENDER_DIST+1;     
         
         // Lifecycle
@@ -70,8 +70,7 @@ class World {
     private:        
         // World Data
         std::unordered_map<glm::ivec3, Chunk> chunkMap;
-        
-        
+                
         // Noise Parameters
         FastNoiseLite noise;
         int   g_NoiseOctaves    = 4;
