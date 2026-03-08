@@ -36,6 +36,7 @@ struct Chunk {
 // WORLD GEN AND STORING
 class World {
     public:    
+    
         Renderer renderer;
 
         // Mesh Data
@@ -45,7 +46,7 @@ class World {
 
         // Render and Load Distances
         int Y_LIMIT = 4; // Vertical world limit in chunks (total height in blocks = Y_LIMIT*CHUNK_SIZE)
-        int XZ_RENDER_DIST = 30;
+        int XZ_RENDER_DIST = 25;
         int XZ_LOAD_DIST = XZ_RENDER_DIST+1;     
         
         // Lifecycle
@@ -68,9 +69,38 @@ class World {
 
         
     private:        
+
+        Threadpool* threadpool;
+
         // World Data
         std::unordered_map<glm::ivec3, Chunk> chunkMap;
-                
+
+        // Bitmasking helpers for Face Culling
+        void populateChunkBitMask(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2]);
+        void populateChunkBitMaskPadding(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2]);
+        void bitMaskFaceCulling(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], std::vector<float>& meshData);
+
+        // Neighbor chunk offsets 
+        const glm::ivec3 neighbourChunks[6] = {
+            glm::ivec3(CHUNK_SIZE, 0, 0),    // Right
+            glm::ivec3(-CHUNK_SIZE, 0, 0),   // Left
+            glm::ivec3(0, CHUNK_SIZE, 0),    // Top
+            glm::ivec3(0, -CHUNK_SIZE, 0),    // Bottom
+            glm::ivec3(0, 0, CHUNK_SIZE),    // Back
+            glm::ivec3(0, 0, -CHUNK_SIZE)   // Front
+        };        
+
+        // normals for each face direction 
+        const glm::vec3 normals[6] = {
+            glm::vec3(1.0f, 0.0f, 0.0f),    // Right (+X)
+            glm::vec3(-1.0f, 0.0f, 0.0f),   // Left (-X)
+            glm::vec3(0.0f, 1.0f, 0.0f),    // Top (+Y)
+            glm::vec3(0.0f, -1.0f, 0.0f),   // Bottom (-Y)
+            glm::vec3(0.0f, 0.0f, 1.0f),    // Back (+Z)
+            glm::vec3(0.0f, 0.0f, -1.0f)    // Front (-Z)
+        };            
+
+
         // Noise Parameters
         FastNoiseLite noise;
         int   g_NoiseOctaves    = 4;
@@ -78,14 +108,7 @@ class World {
         float g_NoiseLacunarity = 2.1f;
         float g_NoiseFrequency  = 0.01f;
         float amplitude         = 10.0f;
-        int   g_NoiseSeed       = 133;
-
-        double processDuration = 10.0;
-
-        // Helpers
-        uint8_t getVisibleFaces(glm::ivec3 block);
-
-        Threadpool* threadpool;
+        int   g_NoiseSeed       = 133;        
     };
     
     
