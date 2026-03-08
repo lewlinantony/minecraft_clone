@@ -53,39 +53,42 @@ void World::generateChunks(glm::vec3 playerPosition) {
     std::vector<glm::ivec3> chunksToGenerate;  // vector of all chunks around the player that we need to generate data for
     chunksToGenerate.reserve((XZ_LOAD_DIST*2+1) * (XZ_LOAD_DIST*2+1) * (Y_LIMIT*2+1)); // Reserve space for worst case
 
-    for (int cx = -XZ_LOAD_DIST; cx <= XZ_LOAD_DIST; cx++) {
-        for (int cz = -XZ_LOAD_DIST; cz <= XZ_LOAD_DIST; cz++) {
+    {   
+        std::shared_lock<std::shared_mutex> lock(chunkMapMutex); // put it outside the loop to avoid locking a shit ton of times which did cause lag in the main thread
 
-            // Use cylindrical distance
-            if (cx * cx + cz * cz > XZ_LOAD_DIST * XZ_LOAD_DIST) {
-                continue;
-            }
-            
-            for (int y = -Y_LIMIT; y <= Y_LIMIT; y++) {
-            //decoupling Y to iterate from Y_LIMIT to -Y_LIMIT cause worlds vertical bounds is fixed and is independent of the players position
-                
-                glm::ivec3 chunkOrigin = glm::ivec3(
-                    playerChunkOrigin.x + (cx * CHUNK_SIZE),
-                    y * CHUNK_SIZE, 
-                    playerChunkOrigin.z + (cz * CHUNK_SIZE)
-                );
-                
-                if(chunkOrigin.y < -(Y_LIMIT*CHUNK_SIZE) || chunkOrigin.y > Y_LIMIT*CHUNK_SIZE) {
-                    continue; // Skip chunks beyond vertical world limits
+        for (int cx = -XZ_LOAD_DIST; cx <= XZ_LOAD_DIST; cx++) {
+            for (int cz = -XZ_LOAD_DIST; cz <= XZ_LOAD_DIST; cz++) {
+    
+                // Use cylindrical distance
+                if (cx * cx + cz * cz > XZ_LOAD_DIST * XZ_LOAD_DIST) {
+                    continue;
                 }
                 
-                {
-                    std::shared_lock<std::shared_mutex> lock(chunkMapMutex);
+                for (int y = -Y_LIMIT; y <= Y_LIMIT; y++) {
+                //decoupling Y to iterate from Y_LIMIT to -Y_LIMIT cause worlds vertical bounds is fixed and is independent of the players position
+                    
+                    glm::ivec3 chunkOrigin = glm::ivec3(
+                        playerChunkOrigin.x + (cx * CHUNK_SIZE),
+                        y * CHUNK_SIZE, 
+                        playerChunkOrigin.z + (cz * CHUNK_SIZE)
+                    );
+                    
+                    if(chunkOrigin.y < -(Y_LIMIT*CHUNK_SIZE) || chunkOrigin.y > Y_LIMIT*CHUNK_SIZE) {
+                        continue; // Skip chunks beyond vertical world limits
+                    }
+                    
                     // If chunk data already exists, skip it
                     if (chunkMap.count(chunkOrigin)) {
                         continue;
                     }
+    
+                    chunksToGenerate.push_back(chunkOrigin);                
                 }
-
-                chunksToGenerate.push_back(chunkOrigin);                
             }
         }
+
     }
+
 
     std::sort(chunksToGenerate.begin(), chunksToGenerate.end(), [playerChunkOrigin](const glm::ivec3& a, const glm::ivec3& b) {
         // Calculate squared distance (cheaper than using sqrt)
@@ -133,18 +136,55 @@ void World::generateChunkData(glm::ivec3 chunkOrigin) {
         }
     }
 
+    currentChunk.state = CHUNK_STATE::GENERATED; // mark chunk as generated
+
     {
         std::unique_lock<std::shared_mutex> writeLock(chunkMapMutex);
         chunkMap[chunkOrigin] = std::move(currentChunk);
     }    
 
+    // try to calculate the mesh for current chunk(mostly fails cause the neighbours ususally arent generated yet)
+    tryCalculateChunkMesh(chunkOrigin);   
     
-    threadpool->enqueueBackWorkerTask([this, chunkOrigin]{
-        calculateChunkMesh(chunkOrigin);
-    });
+    for(auto neighbourOffset : neighbourChunks) {
+        glm::ivec3 neighbourCoord = chunkOrigin + neighbourOffset;
+        tryCalculateChunkMesh(neighbourCoord); // try to calculate the mesh for the neighbours (this is likely where most generation happens)
+    }
 }
 
-void World::calculateChunkAndNeighborsMesh(glm::ivec3 block) {
+void World::tryCalculateChunkMesh(glm::ivec3 chunkCoord) {
+    {
+        std::unique_lock<std::shared_mutex> lock(chunkMapMutex);
+        auto it = chunkMap.find(chunkCoord);
+        if (it == chunkMap.end() || it->second.state != CHUNK_STATE::GENERATED) {
+            return; // Chunk not found or not in the right state, do nothing
+        }
+
+        for(auto neighbourOffset : neighbourChunks) {
+            glm::ivec3 neighbourCoord = chunkCoord + neighbourOffset;
+            
+        if (neighbourCoord.y < -(Y_LIMIT*CHUNK_SIZE) || neighbourCoord.y > Y_LIMIT*CHUNK_SIZE) {
+                continue; // Skip neighbor chunks beyond vertical world limits
+        }
+            
+            auto it = chunkMap.find(neighbourCoord);
+            if (it == chunkMap.end() || it->second.state == CHUNK_STATE::EMPTY) {
+                return; // Neighbor chunk not found or not in the right state, do nothing
+            }
+        }
+
+        it = chunkMap.find(chunkCoord);
+        if (it != chunkMap.end()) {
+            it->second.state = CHUNK_STATE::MESHED; 
+        }
+    }
+
+    threadpool->enqueueFrontWorkerTask([this, chunkCoord]{
+        calculateChunkMesh(chunkCoord);
+    });   
+}
+
+void World::updateChunkAndNeighboursMesh(glm::ivec3 block) {
     glm::ivec3 chunkCoord = getChunkOrigin(block);
     glm::ivec3 blockOffset = block - chunkCoord;
 
@@ -550,10 +590,12 @@ void World::bitMaskFaceCulling(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_
 void World::calculateChunkMesh(glm::ivec3 chunkCoord) {
 
     std::vector<float> meshData;
-    meshData.reserve(50000); // Reserve space for worst case (all blocks visible, 6 faces each, 10 floats per vertex)
+    constexpr int FLOATS_PER_FACE = 6 * 10; // 6 verts, 10 floats each
+    const int FACES_PER_XZ_CELL_EST = 2; // calculated guess
+    meshData.reserve(FLOATS_PER_FACE * FACES_PER_XZ_CELL_EST * CHUNK_SIZE * CHUNK_SIZE);
 
     {
-        std::shared_lock<std::shared_mutex> lock(chunkMapMutex);
+        std::unique_lock<std::shared_mutex> lock(chunkMapMutex);
 
         // Ensure the chunk exists in the map
         if (chunkMap.find(chunkCoord) == chunkMap.end()) {
@@ -577,7 +619,11 @@ void World::calculateChunkMesh(glm::ivec3 chunkCoord) {
 
         // use the bitmask arrays to determine which faces of each block are visible and should be included in the mesh
         bitMaskFaceCulling(chunk, chunkCoord, x_solid_mask, y_solid_mask, z_solid_mask, meshData);
+
+        chunk.state = CHUNK_STATE::MESHED; // mark chunk as meshed
     }
+
+
 
     if (!meshData.empty()) {
         meshData.shrink_to_fit(); 
@@ -587,7 +633,7 @@ void World::calculateChunkMesh(glm::ivec3 chunkCoord) {
     }
 }
 
-void World::uploadChunkMesh(glm::ivec3 chunkCoord, std::vector<float> meshData) {
+void World::uploadChunkMesh(glm::ivec3 chunkCoord, std::vector<float>& meshData) {
 
     GLuint chunkVAO, chunkVBO;
     // Check if the chunk already has a VAO/VBO.

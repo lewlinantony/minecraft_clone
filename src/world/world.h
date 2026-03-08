@@ -26,10 +26,17 @@ struct Block{
     int type = 0; // 0 for air
 };
 
+// CHUNK STATE
+enum class CHUNK_STATE: u_int8_t{
+    EMPTY       = 0,    // No block data, not generated
+    GENERATED   = 1,    // Block data generated, no mesh
+    MESHED      = 2,    // Mesh generated and uploaded to GPU
+};
 
 // CHUNK
 struct Chunk {
     Block blocks[CHUNK_SIZE][CHUNK_SIZE][CHUNK_SIZE];
+    CHUNK_STATE state = CHUNK_STATE::EMPTY; 
 };
 
 
@@ -61,9 +68,10 @@ class World {
         // Terrain Generation
         void generateChunks(glm::vec3 playerPosition);  
         void generateChunkData(glm::ivec3 chunkOrigin); 
-        void calculateChunkAndNeighborsMesh(glm::ivec3 block);
+        void updateChunkAndNeighboursMesh(glm::ivec3 block);
+        void tryCalculateChunkMesh(glm::ivec3 chunkCoord); // only calculates mesh if chunk state is GENERATED, otherwise does nothing
         void calculateChunkMesh(glm::ivec3 chunkCoord);
-        void uploadChunkMesh(glm::ivec3 chunkCoord, std::vector<float> meshData);        
+        void uploadChunkMesh(glm::ivec3 chunkCoord, std::vector<float>& meshData);        
 
         std::shared_mutex chunkMapMutex; // chunkMap shared mutex
 

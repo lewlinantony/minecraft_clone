@@ -85,7 +85,7 @@ void Game::processInput() {
             // Prevent removing bedrock in survival mode
             if (m_player.creativeMode || m_selectedBlock.y != -m_world.Y_LIMIT) {
                 m_world.setBlock(m_selectedBlock, 0); // Set to air
-                m_world.calculateChunkAndNeighborsMesh(m_selectedBlock); // Recalculate meshes
+                m_world.updateChunkAndNeighboursMesh(m_selectedBlock); // Recalculate meshes
             }
         }
     }
@@ -101,7 +101,7 @@ void Game::processInput() {
         }
         if(block && block->type == 0) { // Check if block is air
             m_world.setBlock(m_previousBlock, m_curBlockType); 
-            m_world.calculateChunkAndNeighborsMesh(m_previousBlock);
+            m_world.updateChunkAndNeighboursMesh(m_previousBlock);
         }
     }
     m_input.mouseRightWasPressed = mouseRightIsPressed;
