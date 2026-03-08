@@ -116,12 +116,13 @@ void World::generateChunkData(glm::ivec3 chunkOrigin) {
     Chunk currentChunk;
     for (int x = 0; x < CHUNK_SIZE; x++) {
         for (int z = 0; z < CHUNK_SIZE; z++) {
-            float globalX = (float)(chunkOrigin.x + x);
-            float globalZ = (float)(chunkOrigin.z + z);
-            float height = noise.GetNoise(globalX, globalZ) * amplitude; // Scale noise to 0-2*amp
-            height = glm::round(height);
-
             for (int y = 0; y < CHUNK_SIZE; y++) {
+
+                float globalX = (float)(chunkOrigin.x + x);
+                float globalZ = (float)(chunkOrigin.z + z);
+                float height = noise.GetNoise(globalX, globalZ) * amplitude; // Scale noise to 0-2*amp
+                height = glm::round(height);
+
                 int globalY = chunkOrigin.y + y;
                 if (globalY > height) {
                     currentChunk.blocks[x][y][z].type = 0; // Air
