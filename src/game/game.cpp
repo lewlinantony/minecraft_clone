@@ -136,7 +136,10 @@ void Game::update() {
         m_physics.updatePhysics(m_player, m_collision, m_world, m_deltaTime, m_playerMovedChunks);
     }
     if (m_playerMovedChunks) {
-        m_world.generateChunks(m_player.position);
+        glm::vec3 playerPosition = m_player.position;
+        m_threadpool.enqueueBackWorkerTask([this, playerPosition]{
+            m_world.generateChunks(playerPosition);
+        });
         m_playerMovedChunks = false;
     }
     // Update camera position to follow player's eyes

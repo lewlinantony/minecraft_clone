@@ -114,13 +114,26 @@ void World::generateChunks(glm::vec3 playerPosition) {
 
 void World::generateChunkData(glm::ivec3 chunkOrigin) {
     Chunk currentChunk;
+
+    // precompute the height values for each x,z column in the chunk to save some redundant noise calculations in the inner loop
+    float localHeights[CHUNK_SIZE][CHUNK_SIZE]; 
     for (int x = 0; x < CHUNK_SIZE; x++) {
         for (int z = 0; z < CHUNK_SIZE; z++) {
-            for (int y = 0; y < CHUNK_SIZE; y++) {
+            float globalX = (float)(chunkOrigin.x + x);
+            float globalZ = (float)(chunkOrigin.z + z);
+            localHeights[x][z] = noise.GetNoise(globalX, globalZ) * amplitude;
+        }
+    }    
+    
+
+    // maintain x y z order in the loops to make sure the memory access pattern is cache friendly
+    for (int x = 0; x < CHUNK_SIZE; x++) {
+        for (int y = 0; y < CHUNK_SIZE; y++) {
+            for (int z = 0; z < CHUNK_SIZE; z++) {
 
                 float globalX = (float)(chunkOrigin.x + x);
                 float globalZ = (float)(chunkOrigin.z + z);
-                float height = noise.GetNoise(globalX, globalZ) * amplitude; // Scale noise to 0-2*amp
+                float height = localHeights[x][z]; // use precomputed height value
                 height = glm::round(height);
 
                 int globalY = chunkOrigin.y + y;

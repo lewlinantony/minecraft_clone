@@ -149,6 +149,7 @@ void Renderer::render(glm::ivec3 selectedBlock, Camera& camera, Player& player, 
     totalVisibleChunks = 0;
     inFrustumChunks = 0;
     
+    // here x y z order dont matter cause no array access, so x z y here is just
     for (int cx = -world.XZ_RENDER_DIST; cx <= world.XZ_RENDER_DIST; cx++) {
         for (int cz = -world.XZ_RENDER_DIST; cz <= world.XZ_RENDER_DIST; cz++) {
             
