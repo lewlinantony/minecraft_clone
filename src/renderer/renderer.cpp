@@ -178,9 +178,11 @@ void Renderer::render(glm::ivec3 selectedBlock, Camera& camera, Player& player, 
                 }                
                 
                 // Check if the chunk has a VAO and mesh data to render
-                if (world.chunkVaoMap.count(chunkOrigin) && world.chunkVertexCountMap.count(chunkOrigin)) {
-                    glBindVertexArray(world.chunkVaoMap.at(chunkOrigin));
-                    glDrawArrays(GL_TRIANGLES, 0, world.chunkVertexCountMap.at(chunkOrigin));
+                auto vaoIt = world.chunkVaoMap.find(chunkOrigin);
+                auto countIt = world.chunkVertexCountMap.find(chunkOrigin);                
+                if ((vaoIt != world.chunkVaoMap.end()) && (countIt != world.chunkVertexCountMap.end())) {                        
+                    glBindVertexArray(vaoIt->second);
+                    glDrawArrays(GL_TRIANGLES, 0, countIt->second);
                     inFrustumChunks++;
                 }
             }
