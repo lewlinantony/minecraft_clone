@@ -167,35 +167,46 @@ void World::generateChunkData(glm::ivec3 chunkOrigin) {
 }
 
 void World::tryCalculateChunkMesh(glm::ivec3 chunkCoord) {
+
+    bool canMesh = false;
     {
-        std::unique_lock<std::shared_mutex> lock(chunkMapMutex);
+        std::shared_lock<std::shared_mutex> lock(chunkMapMutex);
+
         auto it = chunkMap.find(chunkCoord);
-        if (it == chunkMap.end() || it->second.state != CHUNK_STATE::GENERATED) {
-            return; // Chunk not found or not in the right state, do nothing
-        }
+        if (it != chunkMap.end() && it->second.state == CHUNK_STATE::GENERATED) {            
+            canMesh = true;
 
-        for(auto neighbourOffset : neighbourChunks) {
-            glm::ivec3 neighbourCoord = chunkCoord + neighbourOffset;
-            
-        if (neighbourCoord.y < -(Y_LIMIT*CHUNK_SIZE) || neighbourCoord.y > Y_LIMIT*CHUNK_SIZE) {
-                continue; // Skip neighbor chunks beyond vertical world limits
-        }
-            
-            auto it = chunkMap.find(neighbourCoord);
-            if (it == chunkMap.end() || it->second.state == CHUNK_STATE::EMPTY) {
-                return; // Neighbor chunk not found or not in the right state, do nothing
+            for(auto neighbourOffset : neighbourChunks) {
+                glm::ivec3 neighbourCoord = chunkCoord + neighbourOffset;
+                
+                if (neighbourCoord.y < -(Y_LIMIT*CHUNK_SIZE) || neighbourCoord.y > Y_LIMIT*CHUNK_SIZE) {
+                        continue; // Skip neighbor chunks beyond vertical world limits
+                }
+                
+                it = chunkMap.find(neighbourCoord);
+                if (it == chunkMap.end() || it->second.state == CHUNK_STATE::EMPTY) {
+                    canMesh = false; // if any neighbour is not generated, we cannot mesh this chunk yet
+                    break;
+                }
             }
+
         }
 
-        it = chunkMap.find(chunkCoord);
-        if (it != chunkMap.end()) {
-            it->second.state = CHUNK_STATE::MESHED; 
+    }
+    if (canMesh) {
+        std::unique_lock<std::shared_mutex> writeLock(chunkMapMutex);
+
+        if (chunkMap[chunkCoord].state != CHUNK_STATE::GENERATED) {
+            return; // another thread couldve meshed while we unlocked
         }
+            
+        chunkMap[chunkCoord].state = CHUNK_STATE::MESHED; 
+
+        threadpool->enqueueFrontWorkerTask([this, chunkCoord]{
+            calculateChunkMesh(chunkCoord);
+        });   
     }
 
-    threadpool->enqueueFrontWorkerTask([this, chunkCoord]{
-        calculateChunkMesh(chunkCoord);
-    });   
 }
 
 void World::updateChunkAndNeighboursMesh(glm::ivec3 block) {

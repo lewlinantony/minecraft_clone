@@ -1,5 +1,6 @@
 # Build directory
 build/
+build_xcode/
 
 # MacOS system files
 .DS_Store

@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.10)
 project(minecraft_clone)
 
+# Force the compiler to keep debug symbols and the call stack intact!
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -g -fno-omit-frame-pointer")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -fno-omit-frame-pointer")
+
 # Specify C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
