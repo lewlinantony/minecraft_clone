@@ -16,10 +16,13 @@ uniform sampler2D text;
 uniform vec3 lightPos;
 uniform vec3 viewPos;
 uniform vec3 lightColor;
+uniform vec3 skyColor;
+uniform float fogMin;
+uniform float fogMax;
 
 void main()
 {
-    // 1. Texture mapping
+    // Texture mapping
     float atlasSize = 512.0;
     float texSize = 64.0f;
     float texPerRow = atlasSize / texSize;
@@ -39,12 +42,14 @@ void main()
         atlasPos = vec2(3.0, 0.0);
     }
 
+    // Calculate UV coordinates for the current block face
     vec2 uvMin = atlasPos / texPerRow;
     vec2 uvMax = (atlasPos + vec2(1.0, 1.0)) / texPerRow;
     vec2 uv = mix(uvMin, uvMax, TexCoord);
     vec4 texColor = texture(text, uv);
 
-    // --- YOUR BORDER CODE ---
+
+    // --- BORDER DARKENING ---
     float borderWidth = 0.003; 
     float borderDarkness = 0.3f;   
 
@@ -82,6 +87,14 @@ void main()
     // Apply lighting to the (already border-darkened) texture color
     vec3 lighting = (ambient + diffuse + specular);
     vec3 result = lighting * texColor.rgb;
+
+    // --- DISTANCE FOG ---
+    float dist = distance(viewPos, FragPos);
+    
+    float fogFactor = smoothstep(fogMin, fogMax, dist);
+    
+    // Blend the lit block color into the sky color
+    result = mix(result, skyColor, fogFactor);
 
     FragColor = vec4(result, texColor.a);
 }

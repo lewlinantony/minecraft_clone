@@ -54,7 +54,7 @@ class World {
 
         // Render and Load Distances
         int Y_LIMIT = 4; // Vertical world limit in chunks (total height in blocks = Y_LIMIT*CHUNK_SIZE)
-        int XZ_RENDER_DIST = 35;
+        int XZ_RENDER_DIST = 25;
         int XZ_LOAD_DIST = XZ_RENDER_DIST+1;     
         
         // Lifecycle
@@ -111,13 +111,15 @@ class World {
 
 
         // Noise Parameters
-        FastNoiseLite noise;
+        FastNoiseLite baseNoise;
         int   g_NoiseOctaves    = 4;
         float g_NoiseGain       = 0.3f;
         float g_NoiseLacunarity = 2.1f;
-        float g_NoiseFrequency  = 0.01f;
+        float g_NoiseFrequency  = 0.002f;
         float amplitude         = 10.0f;
         int   g_NoiseSeed       = 133;        
+
+        FastNoiseLite warpNoise;
     };
     
     

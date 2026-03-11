@@ -112,7 +112,8 @@ void Renderer::initImGui(GLFWwindow* window) {
 
 void Renderer::render(glm::ivec3 selectedBlock, Camera& camera, Player& player, World& world, GLFWwindow* window) {
     // Clear screen
-    glClearColor(0.39f, 0.58f, 0.93f, 1.0f);
+    glm::vec3 skyColor = glm::vec3(0.39f, 0.58f, 0.93f);
+    glClearColor(skyColor.r, skyColor.g, skyColor.b, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Get current window size
@@ -138,6 +139,12 @@ void Renderer::render(glm::ivec3 selectedBlock, Camera& camera, Player& player, 
     chunkShader->setVec3("lightPos", glm::vec3(player.position.x, player.position.y + 100, player.position.z)); // Light high above player
     chunkShader->setVec3("viewPos", camera.position);
     chunkShader->setVec3("lightColor", glm::vec3(1.0f, 1.0f, 1.0f));    
+    chunkShader->setVec3("skyColor", skyColor);
+
+    float calculatedFogMax = static_cast<float>(world.XZ_RENDER_DIST * CHUNK_SIZE);
+    float calculatedFogMin = calculatedFogMax - static_cast<float>(CHUNK_SIZE)*5.0f; 
+    chunkShader->setFloat("fogMax", calculatedFogMax);
+    chunkShader->setFloat("fogMin", calculatedFogMin);    
 
     // Bind texture atlas (dosent have to be done every frame ideally but the performance impact is negligible)
     glActiveTexture(GL_TEXTURE0);
@@ -179,11 +186,15 @@ void Renderer::render(glm::ivec3 selectedBlock, Camera& camera, Player& player, 
                 
                 // Check if the chunk has a VAO and mesh data to render
                 auto vaoIt = world.chunkVaoMap.find(chunkOrigin);
-                auto countIt = world.chunkVertexCountMap.find(chunkOrigin);                
-                if ((vaoIt != world.chunkVaoMap.end()) && (countIt != world.chunkVertexCountMap.end())) {                        
-                    glBindVertexArray(vaoIt->second);
-                    glDrawArrays(GL_TRIANGLES, 0, countIt->second);
-                    inFrustumChunks++;
+                if (vaoIt != world.chunkVaoMap.end()) {
+                    
+                    auto countIt = world.chunkVertexCountMap.find(chunkOrigin);
+                    if (countIt != world.chunkVertexCountMap.end()) {
+                        
+                        glBindVertexArray(vaoIt->second);
+                        glDrawArrays(GL_TRIANGLES, 0, countIt->second);
+                        inFrustumChunks++;
+                    }
                 }
             }
         }

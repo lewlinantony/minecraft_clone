@@ -121,7 +121,10 @@ void World::generateChunkData(glm::ivec3 chunkOrigin) {
         for (int z = 0; z < CHUNK_SIZE; z++) {
             float globalX = (float)(chunkOrigin.x + x);
             float globalZ = (float)(chunkOrigin.z + z);
-            localHeights[x][z] = noise.GetNoise(globalX, globalZ) * amplitude;
+
+            warpNoise.DomainWarp(globalX, globalZ);
+            float noiseVal = baseNoise.GetNoise(globalX, globalZ);
+            localHeights[x][z] = 64 + static_cast<int>(noiseVal * 30.0f);
         }
     }    
     
@@ -129,14 +132,11 @@ void World::generateChunkData(glm::ivec3 chunkOrigin) {
     // maintain x y z order in the loops to make sure the memory access pattern is cache friendly
     for (int x = 0; x < CHUNK_SIZE; x++) {
         for (int y = 0; y < CHUNK_SIZE; y++) {
+            int globalY = chunkOrigin.y + y;
             for (int z = 0; z < CHUNK_SIZE; z++) {
 
-                float globalX = (float)(chunkOrigin.x + x);
-                float globalZ = (float)(chunkOrigin.z + z);
-                float height = localHeights[x][z]; // use precomputed height value
-                height = glm::round(height);
+                int height = localHeights[x][z]; // use precomputed height value
 
-                int globalY = chunkOrigin.y + y;
                 if (globalY > height) {
                     currentChunk.blocks[x][y][z].type = 0; // Air
                 } else if (globalY == (int)height) {
@@ -680,17 +680,20 @@ void World::uploadChunkMesh(glm::ivec3 chunkCoord, std::vector<float>& meshData)
 }
 
 void World::init(glm::vec3& playerPosition, Threadpool* threadpoolPtr) {
+    
     // Configure the noise generator
-    noise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
-    noise.SetFractalType(FastNoiseLite::FractalType_FBm);
-    noise.SetSeed(g_NoiseSeed);
-    noise.SetFractalOctaves(g_NoiseOctaves);
-    noise.SetFractalGain(g_NoiseGain);
-    noise.SetFractalLacunarity(g_NoiseLacunarity);
-    noise.SetFrequency(g_NoiseFrequency);
+    warpNoise.SetDomainWarpType(FastNoiseLite::DomainWarpType_OpenSimplex2);
+    warpNoise.SetDomainWarpAmp(25.0f); 
+    warpNoise.SetFrequency(0.005f); 
+
+    // The Base Noise
+    baseNoise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
+    baseNoise.SetFractalType(FastNoiseLite::FractalType_FBm);
+    baseNoise.SetFractalOctaves(4);
+    baseNoise.SetFrequency(0.003f); 
 
     // Position the player above the terrain at (0,0)
-    playerPosition = glm::vec3(0.0f, (noise.GetNoise(0.0f, 0.0f) + 1. * amplitude) + 3.0f, 0.0f);
+    playerPosition = glm::vec3(0.0f, (baseNoise.GetNoise(0.0f, 0.0f) + 1. * amplitude) + 3.0f, 0.0f);
 
     threadpool = threadpoolPtr;
 
