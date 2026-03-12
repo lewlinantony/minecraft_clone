@@ -318,7 +318,6 @@ void Game::init() {
     initThreadpool();
     initWorld();
     initRenderer();
-    m_player.position.y = m_world.playerStartHeight; // Set player height based on world generation
 }
 
 void Game::run() {

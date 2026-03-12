@@ -47,8 +47,6 @@ class World {
     
         Renderer renderer;
 
-        float playerStartHeight;
-
         // Mesh Data
         std::unordered_map<glm::ivec3, int> chunkVertexCountMap;
         std::unordered_map<glm::ivec3, GLuint> chunkVboMap;
