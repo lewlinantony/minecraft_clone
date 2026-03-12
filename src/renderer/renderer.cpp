@@ -29,7 +29,7 @@ void Renderer::initTextures() {
     // Load image data using stb_image
     int width, height, nrChannels;
     stbi_set_flip_vertically_on_load(true);
-    unsigned char *data = stbi_load("assets/img/64x_minecraft_text.png", &width, &height, &nrChannels, 0);
+    unsigned char *data = stbi_load("assets/img/128x_texture_atlas.png", &width, &height, &nrChannels, 0);
 
     if (data) {
         GLenum format;

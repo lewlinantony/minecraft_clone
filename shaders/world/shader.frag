@@ -30,17 +30,19 @@ void main()
     vec2 atlasPos;
     if (blockType == 1.0) { // Grass
         if (FaceID == 2.0) { 
-            atlasPos = vec2(0.0, 0.0); // Top 
+            atlasPos = vec2(1.0, 0.0); // Top 
         } else if (FaceID == 3.0) {
             atlasPos = vec2(2.0, 0.0); // Bottom 
         } else {
-            atlasPos = vec2(1.0, 0.0); // Sides (0.0, 1.0, 4.0, 5.0) 
-        }                 
-    } else if (blockType == 2.0) { // Dirt
-        atlasPos = vec2(2.0, 0.0);
-    } else if (blockType == 3.0) { // Stone
-        atlasPos = vec2(3.0, 0.0);
+            atlasPos = vec2(0.0, 0.0); // Sides (0.0, 1.0, 4.0, 5.0) 
+        }     
     }
+    else if (blockType == 2.0){ //Dirt
+        atlasPos = vec2(2.0f, 0.0f);
+    }
+    else if (blockType == 3.0){ //Stone
+        atlasPos = vec2(7.0f, 0.0f);
+    }    
 
     // Calculate UV coordinates for the current block face
     vec2 uvMin = atlasPos / texPerRow;

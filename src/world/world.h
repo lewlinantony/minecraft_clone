@@ -54,7 +54,7 @@ class World {
 
         // Render and Load Distances
         int Y_LIMIT = 4; // Vertical world limit in chunks (total height in blocks = Y_LIMIT*CHUNK_SIZE)
-        int XZ_RENDER_DIST = 25;
+        int XZ_RENDER_DIST = 35;
         int XZ_LOAD_DIST = XZ_RENDER_DIST+1;     
         
         // Lifecycle
