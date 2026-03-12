@@ -1,6 +1,5 @@
 #include <game/game.h>
 
-
 void Game::processInput() {
     // Close window
     if (glfwGetKey(m_window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
@@ -319,6 +318,7 @@ void Game::init() {
     initThreadpool();
     initWorld();
     initRenderer();
+    m_player.position.y = m_world.playerStartHeight; // Set player height based on world generation
 }
 
 void Game::run() {

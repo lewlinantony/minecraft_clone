@@ -6,7 +6,7 @@
 // PLAYER
 struct Player {
     // State
-    glm::vec3 position = glm::vec3(0.0f, 30.0f, 0.0f);
+    glm::vec3 position = glm::vec3(0);
     float velocityY = 0.0f;
     bool onGround = false;
     bool creativeMode = true;

@@ -47,6 +47,8 @@ class World {
     
         Renderer renderer;
 
+        float playerStartHeight;
+
         // Mesh Data
         std::unordered_map<glm::ivec3, int> chunkVertexCountMap;
         std::unordered_map<glm::ivec3, GLuint> chunkVboMap;
@@ -54,7 +56,7 @@ class World {
 
         // Render and Load Distances
         int Y_LIMIT = 4; // Vertical world limit in chunks (total height in blocks = Y_LIMIT*CHUNK_SIZE)
-        int XZ_RENDER_DIST = 35;
+        int XZ_RENDER_DIST = 45;
         int XZ_LOAD_DIST = XZ_RENDER_DIST+1;     
         
         // Lifecycle

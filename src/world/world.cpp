@@ -697,6 +697,11 @@ void World::init(glm::vec3& playerPosition, Threadpool* threadpoolPtr) {
 
     threadpool = threadpoolPtr;
 
+
+    warpNoise.DomainWarp(playerPosition.x, playerPosition.z);
+    float noiseVal = baseNoise.GetNoise(playerPosition.x, playerPosition.z);
+    playerStartHeight = 66 + static_cast<int>(noiseVal * 30.0f); 
+
     // Generate the initial terrain around the player
     generateChunks(playerPosition);       
 }
