@@ -54,7 +54,7 @@ class World {
 
         // Render and Load Distances
         int Y_LIMIT = 4; // Vertical world limit in chunks (total height in blocks = Y_LIMIT*CHUNK_SIZE)
-        int XZ_RENDER_DIST = 45;
+        int XZ_RENDER_DIST = 25;
         int XZ_LOAD_DIST = XZ_RENDER_DIST+1;     
         
         // Lifecycle
@@ -85,9 +85,9 @@ class World {
         std::unordered_map<glm::ivec3, Chunk> chunkMap;
 
         // Bitmasking helpers for Face Culling
-        void populateChunkBitMask(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2]);
-        void populateChunkBitMaskPadding(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2]);
-        void bitMaskFaceCulling(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], std::vector<float>& meshData);
+        void populateChunkBitMask(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t x_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2]);
+        void populateChunkBitMaskPadding(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t x_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2]);
+        void bitMaskFaceCulling(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t x_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], std::vector<float>& meshData);
 
         // Neighbor chunk offsets 
         const glm::ivec3 neighbourChunks[6] = {
@@ -112,6 +112,10 @@ class World {
 
         // Noise Parameters
         FastNoiseLite baseNoise;
+        FastNoiseLite temperatureNoise;
+        FastNoiseLite moistureNoise;
+        FastNoiseLite treeNoise;
+        
         int   g_NoiseOctaves    = 4;
         float g_NoiseGain       = 0.3f;
         float g_NoiseLacunarity = 2.1f;

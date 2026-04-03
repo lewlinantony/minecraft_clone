@@ -43,12 +43,39 @@ void main()
     else if (blockType == 3.0){ //Stone
         atlasPos = vec2(7.0f, 0.0f);
     }    
+    else if (blockType == 4.0){ //Sand
+        atlasPos = vec2(6.0f, 0.0f);
+    }
+    else if (blockType == 5.0){ //Snow
+        if (FaceID == 2.0) {
+            atlasPos = vec2(4.0, 0.0); // Top 
+        } else if (FaceID == 3.0) {
+            atlasPos = vec2(2.0, 0.0); // Bottom 
+        } else {
+            atlasPos = vec2(3.0, 0.0); // sides
+        }
+    }
+    else if (blockType == 6.0){ //Water
+        atlasPos = vec2(5.0f, 1.0f);
+    }
+    else if (blockType == 7.0){ //Wood
+        if (FaceID == 2.0 || FaceID == 3.0) {
+            atlasPos = vec2(1.0, 1.0); // Top and Bottom
+        }
+        else {
+            atlasPos = vec2(0.0, 1.0); // Sides
+        }
+    }
+    else if (blockType == 8.0){ //Leaves
+        atlasPos = vec2(4.0, 1.0); 
+    }
 
     // Calculate UV coordinates for the current block face
     vec2 uvMin = atlasPos / texPerRow;
     vec2 uvMax = (atlasPos + vec2(1.0, 1.0)) / texPerRow;
     vec2 uv = mix(uvMin, uvMax, TexCoord);
     vec4 texColor = texture(text, uv);
+    if (texColor.a < 0.1) discard;
 
 
     // --- BORDER DARKENING ---

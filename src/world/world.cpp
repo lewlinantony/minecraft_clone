@@ -115,8 +115,67 @@ void World::generateChunks(glm::vec3 playerPosition) {
 void World::generateChunkData(glm::ivec3 chunkOrigin) {
     Chunk currentChunk;
 
+    struct TreeInfo {
+        int x; // local to chunk, can be outside 0..CHUNK_SIZE-1
+        int z; 
+        int baseHeight;
+        int height;
+        uint32_t hash;
+    };
+    std::vector<TreeInfo> localTrees;
+    localTrees.reserve(8); // Usually only a few trees per chunk
+
+    // Find all trees that can intersect this chunk (leaves extend up to 2 blocks out)
+    for (int x = -2; x <= CHUNK_SIZE + 1; x++) {
+        for (int z = -2; z <= CHUNK_SIZE + 1; z++) {
+            int globalNX = chunkOrigin.x + x;
+            int globalNZ = chunkOrigin.z + z;
+            
+            int cx = globalNX >= 0 ? globalNX / 6 : (globalNX - 5) / 6;
+            int cz = globalNZ >= 0 ? globalNZ / 6 : (globalNZ - 5) / 6;
+            
+            uint32_t h = (uint32_t)(cx) * 374761393U + (uint32_t)(cz) * 668265263U;
+            h = (h ^ (h >> 13)) * 1274126177U;
+            h = h ^ (h >> 16);
+            
+            int tx = cx * 6 + (h % 4) + 1;
+            int tz = cz * 6 + ((h >> 8) % 4) + 1;
+            
+            if (globalNX == tx && globalNZ == tz) {
+                if (((h >> 16) % 100) < 40) { // 40% chance of a tree in this cell
+                    float nx_f = (float)globalNX;
+                    float nz_f = (float)globalNZ;
+                    
+                    float treeTemp = temperatureNoise.GetNoise(nx_f, nz_f);
+                    float treeMoist = moistureNoise.GetNoise(nx_f, nz_f);
+                    
+                    float warpX = nx_f, warpZ = nz_f;
+                    warpNoise.DomainWarp(warpX, warpZ);
+                    float treeNoiseVal = baseNoise.GetNoise(warpX, warpZ);
+                    float treeHeightF = 50.0f + std::pow((treeNoiseVal + 1.0f) * 0.5f, 1.5f) * 80.0f;
+                    int treeHeight = (int)treeHeightF;
+                    
+                    float treeMountainLine = 85.0f + treeMoist * 20.0f;
+                    
+                    if (treeTemp > -0.2f && treeMoist > 0.0f && treeHeight <= treeMountainLine && treeHeight > 64) {
+                        TreeInfo ti;
+                        ti.x = x;
+                        ti.z = z;
+                        ti.baseHeight = treeHeight;
+                        ti.height = 5 + ((h >> 24) % 3); // 5 to 7 blocks tall
+                        ti.hash = h;
+                        localTrees.push_back(ti);
+                    }
+                }
+            }
+        }
+    }
+
     // precompute the height values for each x,z column in the chunk to save some redundant noise calculations in the inner loop
     float localHeights[CHUNK_SIZE][CHUNK_SIZE]; 
+    float localTemp[CHUNK_SIZE][CHUNK_SIZE];
+    float localMoisture[CHUNK_SIZE][CHUNK_SIZE];
+
     for (int x = 0; x < CHUNK_SIZE; x++) {
         for (int z = 0; z < CHUNK_SIZE; z++) {
             float globalX = (float)(chunkOrigin.x + x);
@@ -124,7 +183,13 @@ void World::generateChunkData(glm::ivec3 chunkOrigin) {
 
             warpNoise.DomainWarp(globalX, globalZ);
             float noiseVal = baseNoise.GetNoise(globalX, globalZ);
-            localHeights[x][z] = 64 + static_cast<int>(noiseVal * 30.0f);
+            
+            float normalizedNoise = (noiseVal + 1.0f) * 0.5f;
+            float curvedNoise = std::pow(normalizedNoise, 1.5f);
+            localHeights[x][z] = 50.0f + curvedNoise * 80.0f;
+
+            localTemp[x][z] = temperatureNoise.GetNoise((float)(chunkOrigin.x + x), (float)(chunkOrigin.z + z));
+            localMoisture[x][z] = moistureNoise.GetNoise((float)(chunkOrigin.x + x), (float)(chunkOrigin.z + z));
         }
     }    
     
@@ -135,17 +200,96 @@ void World::generateChunkData(glm::ivec3 chunkOrigin) {
             int globalY = chunkOrigin.y + y;
             for (int z = 0; z < CHUNK_SIZE; z++) {
 
-                int height = localHeights[x][z]; // use precomputed height value
+                int height = (int)localHeights[x][z]; 
+                float temp = localTemp[x][z];
+                float moisture = localMoisture[x][z];
+                
+                int blockType = 0; // Default Air
+
+                float snowLine = 100.0f + temp * 40.0f;
+                float mountainLine = 85.0f + moisture * 20.0f;
 
                 if (globalY > height) {
-                    currentChunk.blocks[x][y][z].type = 0; // Air
-                } else if (globalY == (int)height) {
-                    currentChunk.blocks[x][y][z].type = 1; // Grass
+                    if (globalY <= 60) {
+                        blockType = 6; // Water
+                    } else if (globalY > 64) {
+                        // Check if this block intersects any of the trees near this chunk
+                        for (const auto& tree : localTrees) {
+                            int dx = tree.x - x;
+                            int dz = tree.z - z;
+                            
+                            // Check if within bounds of the tree's canopy
+                            if (std::abs(dx) <= 2 && std::abs(dz) <= 2) {
+                                int dy = globalY - tree.baseHeight;
+                                
+                                // Trunk
+                                if (dx == 0 && dz == 0 && dy > 0 && dy <= tree.height) {
+                                    blockType = 7; // Wood trunk
+                                    break;
+                                }
+                                
+                                // Leaves (Minecraft oak tree style)
+                                if (dy >= tree.height - 2 && dy <= tree.height + 1) {
+                                    int leafRadius = (dy >= tree.height) ? 1 : 2;
+                                    if (std::abs(dx) <= leafRadius && std::abs(dz) <= leafRadius) {
+                                        // remove corners
+                                        if (std::abs(dx) == leafRadius && std::abs(dz) == leafRadius) {
+                                            uint32_t cornerHash = tree.hash + dy * 13 + dx * 17 + dz * 29;
+                                            bool keepCorner = (cornerHash % 2) == 0;
+                                            if ((dy < tree.height) || keepCorner) {
+                                                bool removeBottomCorner = (leafRadius == 2) && ((cornerHash % 4) == 0);
+                                                if (!removeBottomCorner) {
+                                                    blockType = 8; // Leaves
+                                                    break;
+                                                }
+                                            }
+                                        } else {
+                                            blockType = 8; // Leaves
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else if (globalY == height) {
+                    // Surface block
+                    if (globalY <= 64) {
+                        if (temp > -0.2f && moisture < 0.3f) {
+                            blockType = 4; // Sand near water
+                        } else {
+                            blockType = 2; // Dirt near cold water
+                        }
+                    } else if (globalY > snowLine || (temp < -0.4f && globalY > 64)) {
+                        blockType = 5; // Snow peaks / Taiga
+                    } else if (globalY > mountainLine) {
+                        blockType = 3; // Stone mountains
+                    } else {
+                        // Mid elevation
+                        if (temp > 0.3f && moisture < -0.4f) {
+                            blockType = 4; // Desert Sand
+                        } else if (temp > 0.0f && moisture < -0.2f) {
+                            blockType = 2; // Dirt / Barren ground
+                        } else {
+                            blockType = 1; // Grassland / Forest top
+                        }
+                    }
                 } else if (globalY >= height - 5) {
-                    currentChunk.blocks[x][y][z].type = 2; // Dirt
+                    // Subsurface
+                    if (height <= 64 && (temp > -0.2f && moisture < 0.3f)) {
+                        blockType = 4; // Sand extends deeper
+                    } else if (height > mountainLine) {
+                        blockType = 3; // Stone extends deeper
+                    } else if (temp > 0.3f && moisture < -0.4f) {
+                        blockType = 4; // Desert sand extends deeper
+                    } else {
+                        blockType = 2; // Dirt
+                    }
                 } else if (globalY >= -(Y_LIMIT*CHUNK_SIZE)) {
-                    currentChunk.blocks[x][y][z].type = 3; // Stone
+                    blockType = 3; // Stone deep underground
                 }
+
+                currentChunk.blocks[x][y][z].type = blockType;
             }
         }
     }
@@ -245,31 +389,37 @@ void World::updateChunkAndNeighboursMesh(glm::ivec3 block) {
     }
 }
 
-void World::populateChunkBitMask(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2]){
+void World::populateChunkBitMask(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t x_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2]){
     // create bitmask representation of chunk, where 1 represents a solid block, 0 represents air
     for(int x=0; x<CHUNK_SIZE; x++){
         for(int y=0; y<CHUNK_SIZE; y++){
             for(int z=0; z<CHUNK_SIZE; z++){
-                if (chunk.blocks[x][y][z].type != 0) {
-                    x_solid_mask[y+1][z+1] |= (1ULL << (x+1)); // +1 for padding offset(this is what we subtract when calculating actual blockPos in mesh generation)
+                int t = chunk.blocks[x][y][z].type;
+                if (t != 0) {
+                    x_solid_mask[y+1][z+1] |= (1ULL << (x+1)); 
                     y_solid_mask[x+1][z+1] |= (1ULL << (y+1)); 
                     z_solid_mask[x+1][y+1] |= (1ULL << (z+1)); 
+                }
+                if (t != 0 && t != 8) {
+                    x_opaque_mask[y+1][z+1] |= (1ULL << (x+1));
+                    y_opaque_mask[x+1][z+1] |= (1ULL << (y+1));
+                    z_opaque_mask[x+1][y+1] |= (1ULL << (z+1));
                 }
             }
         }
     }
 }
 
-void World::populateChunkBitMaskPadding(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2]){
+void World::populateChunkBitMaskPadding(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t x_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2]){
     
     glm::ivec3 rightNeightbour = chunkCoord + neighbourChunks[0];
     auto it = chunkMap.find(rightNeightbour);
     if (it != chunkMap.end()) {
         for(int y=0; y<CHUNK_SIZE; y++){
             for(int z=0; z<CHUNK_SIZE; z++){
-                if (it->second.blocks[0][y][z].type != 0) {
-                    x_solid_mask[y+1][z+1] |= (1ULL << (CHUNK_SIZE+1)); // 0th index of neighbour goes in CHUNK_SIZE+1 index of current chunk's mask padding
-                }
+                int t = it->second.blocks[0][y][z].type; 
+                if (t != 0) x_solid_mask[y+1][z+1] |= (1ULL << (CHUNK_SIZE+1)); 
+                if (t != 0 && t != 8) x_opaque_mask[y+1][z+1] |= (1ULL << (CHUNK_SIZE+1));
             }
         }
     }   
@@ -279,9 +429,9 @@ void World::populateChunkBitMaskPadding(Chunk& chunk, glm::ivec3 chunkCoord, u_i
     if (it != chunkMap.end()) {
         for(int y=0; y<CHUNK_SIZE; y++){
             for(int z=0; z<CHUNK_SIZE; z++){
-                if (it->second.blocks[CHUNK_SIZE-1][y][z].type != 0) {
-                    x_solid_mask[y+1][z+1] |= (1ULL << 0); // CHUNK_SIZE-1 index of neighbour goes in 0th index of current chunk's mask padding
-                }
+                int t = it->second.blocks[CHUNK_SIZE-1][y][z].type; 
+                if (t != 0) x_solid_mask[y+1][z+1] |= (1ULL << 0);
+                if (t != 0 && t != 8) x_opaque_mask[y+1][z+1] |= (1ULL << 0);
             }
         }
     }
@@ -291,9 +441,9 @@ void World::populateChunkBitMaskPadding(Chunk& chunk, glm::ivec3 chunkCoord, u_i
     if (it != chunkMap.end()) {
         for(int x=0; x<CHUNK_SIZE; x++){
             for(int z=0; z<CHUNK_SIZE; z++){
-                if (it->second.blocks[x][0][z].type != 0) {
-                    y_solid_mask[x+1][z+1] |= (1ULL << (CHUNK_SIZE+1)); 
-                }
+                int t = it->second.blocks[x][0][z].type; 
+                if (t != 0) y_solid_mask[x+1][z+1] |= (1ULL << (CHUNK_SIZE+1)); 
+                if (t != 0 && t != 8) y_opaque_mask[x+1][z+1] |= (1ULL << (CHUNK_SIZE+1));
             }
         }
     }
@@ -303,9 +453,9 @@ void World::populateChunkBitMaskPadding(Chunk& chunk, glm::ivec3 chunkCoord, u_i
     if (it != chunkMap.end()) {
         for(int x=0; x<CHUNK_SIZE; x++){
             for(int z=0; z<CHUNK_SIZE; z++){
-                if (it->second.blocks[x][CHUNK_SIZE-1][z].type != 0) {
-                    y_solid_mask[x+1][z+1] |= (1ULL << 0); 
-                }
+                int t = it->second.blocks[x][CHUNK_SIZE-1][z].type; 
+                if (t != 0) y_solid_mask[x+1][z+1] |= (1ULL << 0); 
+                if (t != 0 && t != 8) y_opaque_mask[x+1][z+1] |= (1ULL << 0);
             }
         }
     }
@@ -315,9 +465,9 @@ void World::populateChunkBitMaskPadding(Chunk& chunk, glm::ivec3 chunkCoord, u_i
     if (it != chunkMap.end()) {
         for(int x=0; x<CHUNK_SIZE; x++){
             for(int y=0; y<CHUNK_SIZE; y++){
-                if (it->second.blocks[x][y][0].type != 0) {
-                    z_solid_mask[x+1][y+1] |= (1ULL << (CHUNK_SIZE+1)); 
-                }
+                int t = it->second.blocks[x][y][0].type; 
+                if (t != 0) z_solid_mask[x+1][y+1] |= (1ULL << (CHUNK_SIZE+1)); 
+                if (t != 0 && t != 8) z_opaque_mask[x+1][y+1] |= (1ULL << (CHUNK_SIZE+1));
             }
         }
     }
@@ -327,15 +477,15 @@ void World::populateChunkBitMaskPadding(Chunk& chunk, glm::ivec3 chunkCoord, u_i
     if (it != chunkMap.end()) {
         for(int x=0; x<CHUNK_SIZE; x++){
             for(int y=0; y<CHUNK_SIZE; y++){
-                if (it->second.blocks[x][y][CHUNK_SIZE-1].type != 0) {
-                    z_solid_mask[x+1][y+1] |= (1ULL << 0); 
-                }
+                int t = it->second.blocks[x][y][CHUNK_SIZE-1].type; 
+                if (t != 0) z_solid_mask[x+1][y+1] |= (1ULL << 0); 
+                if (t != 0 && t != 8) z_opaque_mask[x+1][y+1] |= (1ULL << 0);
             }
         }
     }
 }
 
-void World::bitMaskFaceCulling(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], std::vector<float>& meshData){
+void World::bitMaskFaceCulling(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t x_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], std::vector<float>& meshData){
     
     u_int64_t FILTER = ((1ULL << CHUNK_SIZE) - 1) << 1; // Mask to ignore the padding bits (0 and CHUNK_SIZE+1)
     
@@ -345,10 +495,9 @@ void World::bitMaskFaceCulling(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_
             
             // take a 64-bit row from the bitmask
             uint64_t row = x_solid_mask[y][z];
-
-            // use bitwise operations to find which blocks in the row have visible +X and -X faces
-            uint64_t rightVisible = (row & ~(row >> 1)) & FILTER;
-            uint64_t leftVisible  = (row & ~(row << 1)) & FILTER;
+            uint64_t opq = x_opaque_mask[y][z];
+            uint64_t rightVisible = (row & ~(opq >> 1)) & FILTER;
+            uint64_t leftVisible  = (row & ~(opq << 1)) & FILTER;
 
             // iterate and add the visible faces to the mesh data
             while(rightVisible){
@@ -432,9 +581,9 @@ void World::bitMaskFaceCulling(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_
     for(int x=1; x<CHUNK_SIZE+1; x++){
         for(int z=1; z<CHUNK_SIZE+1; z++){
             uint64_t row = y_solid_mask[x][z];
-
-            uint64_t topVisible = (row & ~(row >> 1)) & FILTER;
-            uint64_t bottomVisible = (row & ~(row << 1)) & FILTER;
+            uint64_t opq = y_opaque_mask[x][z];
+            uint64_t topVisible = (row & ~(opq >> 1)) & FILTER;
+            uint64_t bottomVisible = (row & ~(opq << 1)) & FILTER;
 
 
             while(topVisible){
@@ -525,9 +674,9 @@ void World::bitMaskFaceCulling(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_
     for(int x=1; x<CHUNK_SIZE+1; x++){
         for(int y=1; y<CHUNK_SIZE+1; y++){
             uint64_t row = z_solid_mask[x][y];
-
-            uint64_t backVisible = (row & ~(row >> 1)) & FILTER;
-            uint64_t frontVisible = (row & ~(row << 1)) & FILTER;
+            uint64_t opq = z_opaque_mask[x][y];
+            uint64_t backVisible = (row & ~(opq >> 1)) & FILTER;
+            uint64_t frontVisible = (row & ~(opq << 1)) & FILTER;
 
             while(backVisible){
                 int bit_index = __builtin_ctzll(backVisible);
@@ -635,15 +784,19 @@ void World::calculateChunkMesh(glm::ivec3 chunkCoord) {
         u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2] = {0}; // +2 for the padding
         u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2] = {0};
         u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2] = {0};
+        u_int64_t x_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2] = {0};
+        u_int64_t y_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2] = {0};
+        u_int64_t z_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2] = {0};
+
 
         // populate the bitmask arrays with current chunk data
-        populateChunkBitMask(chunk, chunkCoord, x_solid_mask, y_solid_mask, z_solid_mask);
+        populateChunkBitMask(chunk, chunkCoord, x_solid_mask, y_solid_mask, z_solid_mask, x_opaque_mask, y_opaque_mask, z_opaque_mask);
 
         // populate the bitmask padding with neighbor chunk data to allow proper face culling at chunk borders
-        populateChunkBitMaskPadding(chunk, chunkCoord, x_solid_mask, y_solid_mask, z_solid_mask);
+        populateChunkBitMaskPadding(chunk, chunkCoord, x_solid_mask, y_solid_mask, z_solid_mask, x_opaque_mask, y_opaque_mask, z_opaque_mask);
 
         // use the bitmask arrays to determine which faces of each block are visible and should be included in the mesh
-        bitMaskFaceCulling(chunk, chunkCoord, x_solid_mask, y_solid_mask, z_solid_mask, meshData);
+        bitMaskFaceCulling(chunk, chunkCoord, x_solid_mask, y_solid_mask, z_solid_mask, x_opaque_mask, y_opaque_mask, z_opaque_mask, meshData);
 
         chunk.state = CHUNK_STATE::MESHED; // mark chunk as meshed
     }
@@ -691,11 +844,28 @@ void World::init(glm::vec3& playerPosition, Threadpool* threadpoolPtr) {
     baseNoise.SetFractalType(FastNoiseLite::FractalType_FBm);
     baseNoise.SetFractalOctaves(4);
     baseNoise.SetFrequency(0.003f); 
+    
+    // The Temperature Noise
+    temperatureNoise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
+    temperatureNoise.SetFrequency(0.001f);
+    temperatureNoise.SetSeed(12345);
+
+    // The Moisture Noise
+    moistureNoise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
+    moistureNoise.SetFrequency(0.001f);
+    moistureNoise.SetSeed(54321);
+
+    // The Tree Noise
+    treeNoise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
+    treeNoise.SetFrequency(100.0f); // High frequency for randomized tree placement
+    treeNoise.SetSeed(9999);
 
     // Position the player above the terrain at (0,0)
     warpNoise.DomainWarp(playerPosition.x, playerPosition.z);
     float noiseVal = baseNoise.GetNoise(playerPosition.x, playerPosition.z);
-    playerPosition.y = 66 + static_cast<int>(noiseVal * 30.0f); 
+    float normalizedNoise = (noiseVal + 1.0f) * 0.5f;
+    float curvedNoise = std::pow(normalizedNoise, 1.5f);
+    playerPosition.y = 52.0f + curvedNoise * 80.0f;
 
 
     threadpool = threadpoolPtr;
