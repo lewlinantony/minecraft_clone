@@ -11,8 +11,8 @@ uniform int blockType;
 
 void main()
 {
-    float atlasSize = 1024.0;
-    float texSize = 128.0f;
+    float atlasSize = 512.0;
+    float texSize = 64.0f;
     float texPerRow = atlasSize/texSize;
 
     vec2 atlasPos;
@@ -31,6 +31,32 @@ void main()
     else if (blockType == 3.0){ //Stone
         atlasPos = vec2(7.0f, 0.0f);
     }    
+    else if (blockType == 4.0){ //Sand
+        atlasPos = vec2(6.0f, 0.0f);
+    }
+    else if (blockType == 5.0){ //Snow
+        if (FaceID == 2.0) {
+            atlasPos = vec2(4.0, 0.0); // Top 
+        } else if (FaceID == 3.0) {
+            atlasPos = vec2(2.0, 0.0); // Bottom 
+        } else {
+            atlasPos = vec2(3.0, 0.0); // sides
+        }
+    }
+    else if (blockType == 6.0){ //Water
+        atlasPos = vec2(5.0f, 1.0f);
+    }
+    else if (blockType == 7.0){ //Wood
+        if (FaceID == 2.0 || FaceID == 3.0) {
+            atlasPos = vec2(1.0, 1.0); // Top and Bottom
+        }
+        else {
+            atlasPos = vec2(0.0, 1.0); // Sides
+        }
+    }
+    else if (blockType == 8.0){ //Leaves
+        atlasPos = vec2(4.0, 1.0); 
+    }
 
     // we are working with normalised values here    
     vec2 uvMin = atlasPos / texPerRow;
@@ -38,6 +64,7 @@ void main()
     vec2 uv = mix(uvMin, uvMax, TexCoord);    
 
     vec4 texColor = texture(text, uv);
+    if (texColor.a < 0.1) discard;
 
     float borderWidth = 0.003; // Controls how wide the border is (0.01-0.05 works well)
     float borderDarkness = 0.3f;    
@@ -56,6 +83,10 @@ void main()
 
     // Apply the border darkening
     texColor.rgb *= borderFactor;
+
+    if (blockType == 6.0) {
+        texColor.a *= 0.8;
+    }
 
     float brightness = 0.8f;
 

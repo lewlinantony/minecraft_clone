@@ -9,6 +9,7 @@ struct Player {
     glm::vec3 position = glm::vec3(0);
     float velocityY = 0.0f;
     bool onGround = false;
+    bool inWater = false;
     bool creativeMode = true;
 
     // Properties

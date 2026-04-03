@@ -19,6 +19,7 @@ uniform vec3 lightColor;
 uniform vec3 skyColor;
 uniform float fogMin;
 uniform float fogMax;
+uniform int renderPass;
 
 void main()
 {
@@ -77,6 +78,9 @@ void main()
     vec4 texColor = texture(text, uv);
     if (texColor.a < 0.1) discard;
 
+    if (renderPass == 0 && blockType == 6.0) discard;
+    if (renderPass == 1 && blockType != 6.0) discard;
+
 
     // --- BORDER DARKENING ---
     float borderWidth = 0.003; 
@@ -93,6 +97,10 @@ void main()
     
     // Apply the border darkening FIRST
     texColor.rgb *= borderFactor;
+
+    if (blockType == 6.0) {
+        texColor.a *= 0.8;
+    }
 
     // --- PHONG LIGHTING CALCULATION ---
     // Ambient

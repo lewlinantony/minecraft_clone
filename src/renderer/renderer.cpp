@@ -156,7 +156,8 @@ void Renderer::render(glm::ivec3 selectedBlock, Camera& camera, Player& player, 
     totalVisibleChunks = 0;
     inFrustumChunks = 0;
     
-    // here x y z order dont matter cause no array access, so x z y here is just
+    std::vector<glm::ivec3> visibleChunkOrigins;
+
     for (int cx = -world.XZ_RENDER_DIST; cx <= world.XZ_RENDER_DIST; cx++) {
         for (int cz = -world.XZ_RENDER_DIST; cz <= world.XZ_RENDER_DIST; cz++) {
             
@@ -190,15 +191,38 @@ void Renderer::render(glm::ivec3 selectedBlock, Camera& camera, Player& player, 
                     
                     auto countIt = world.chunkVertexCountMap.find(chunkOrigin);
                     if (countIt != world.chunkVertexCountMap.end()) {
-                        
-                        glBindVertexArray(vaoIt->second);
-                        glDrawArrays(GL_TRIANGLES, 0, countIt->second);
-                        inFrustumChunks++;
+                        visibleChunkOrigins.push_back(chunkOrigin);
                     }
                 }
             }
         }
     }
+
+    // Pass 1: Opaque Blocks
+    chunkShader->setInt("renderPass", 0); // 0 = Opaque
+    for (const auto& chunkOrigin : visibleChunkOrigins) {
+        auto vaoIt = world.chunkVaoMap.find(chunkOrigin);
+        auto countIt = world.chunkVertexCountMap.find(chunkOrigin);
+        glBindVertexArray(vaoIt->second);
+        glDrawArrays(GL_TRIANGLES, 0, countIt->second);
+        inFrustumChunks++;
+    }
+
+    // Pass 2: Transparent Blocks (Water)
+    chunkShader->setInt("renderPass", 1); // 1 = Transparent
+    // Disable depth mask so transparent faces don't occlude other transparent faces / themselves in weird ways
+    // (though OpenGL order might still be off, this prevents background holes)
+    glDepthMask(GL_FALSE);
+    glEnable(GL_BLEND); // ensure blending is on
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    for (const auto& chunkOrigin : visibleChunkOrigins) {
+        auto vaoIt = world.chunkVaoMap.find(chunkOrigin);
+        auto countIt = world.chunkVertexCountMap.find(chunkOrigin);
+        glBindVertexArray(vaoIt->second);
+        glDrawArrays(GL_TRIANGLES, 0, countIt->second);
+    }
+    glDepthMask(GL_TRUE); // re-enable for the next frame / next elements
     
     // --- Render Selected Block Highlight ---
     if (selectedBlock != glm::ivec3(INT_MAX) && !player.creativeMode){

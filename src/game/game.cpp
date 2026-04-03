@@ -22,6 +22,9 @@ void Game::processInput() {
     // --- Movement ---
     float speed = m_camera.speed * m_deltaTime;
     float currentMoveScale = (m_player.onGround || m_player.creativeMode) ? 1.0f : 0.5f;
+    if (m_player.inWater && !m_player.creativeMode) {
+        currentMoveScale = 0.5f; // Slower movement in water
+    }
 
     glm::vec3 front = m_camera.front;
     front.y = 0.0f;
@@ -64,11 +67,16 @@ void Game::processInput() {
         m_playerMovedChunks = true;
     }
 
-    // Jump
+    // Jump or Swim
     bool spaceIsPressed = glfwGetKey(m_window, GLFW_KEY_SPACE) == GLFW_PRESS;
-    if (!m_player.creativeMode && spaceIsPressed && !m_input.spaceWasPressed && m_player.onGround) {
-        m_player.velocityY += m_player.jumpVelocity;
-        m_player.onGround = false;
+    if (!m_player.creativeMode && spaceIsPressed) {
+        if (m_player.inWater) {
+            m_player.velocityY += 50.0f * m_deltaTime;
+            if (m_player.velocityY > 6.0f) m_player.velocityY = 6.0f;
+        } else if (!m_input.spaceWasPressed && m_player.onGround) {
+            m_player.velocityY += m_player.jumpVelocity;
+            m_player.onGround = false;
+        }
     }
     m_input.spaceWasPressed = spaceIsPressed;
 
@@ -176,8 +184,8 @@ void Game::performRaycasting() {
                 std::shared_lock<std::shared_mutex> lock(m_world.chunkMapMutex);
                 hitBlock = m_world.getBlock(blockPosition);
             }
-            if (hitBlock && hitBlock->type != 0) {
-                // We hit a non-air block
+            if (hitBlock && hitBlock->type != 0 && hitBlock->type != 6) {
+                // We hit a non-air, non-water block
                 if (i < closestHit){
                     closestHit = i; 
                     bestHit = blockPosition;

@@ -389,7 +389,7 @@ void World::updateChunkAndNeighboursMesh(glm::ivec3 block) {
     }
 }
 
-void World::populateChunkBitMask(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t x_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2]){
+void World::populateChunkBitMask(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t x_water_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_water_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_water_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t x_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2]){
     // create bitmask representation of chunk, where 1 represents a solid block, 0 represents air
     for(int x=0; x<CHUNK_SIZE; x++){
         for(int y=0; y<CHUNK_SIZE; y++){
@@ -400,7 +400,12 @@ void World::populateChunkBitMask(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t 
                     y_solid_mask[x+1][z+1] |= (1ULL << (y+1)); 
                     z_solid_mask[x+1][y+1] |= (1ULL << (z+1)); 
                 }
-                if (t != 0 && t != 8) {
+                if (t == 6) {
+                    x_water_mask[y+1][z+1] |= (1ULL << (x+1));
+                    y_water_mask[x+1][z+1] |= (1ULL << (y+1));
+                    z_water_mask[x+1][y+1] |= (1ULL << (z+1));
+                }
+                if (t != 0 && t != 8 && t != 6) {
                     x_opaque_mask[y+1][z+1] |= (1ULL << (x+1));
                     y_opaque_mask[x+1][z+1] |= (1ULL << (y+1));
                     z_opaque_mask[x+1][y+1] |= (1ULL << (z+1));
@@ -410,7 +415,7 @@ void World::populateChunkBitMask(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t 
     }
 }
 
-void World::populateChunkBitMaskPadding(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t x_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2]){
+void World::populateChunkBitMaskPadding(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t x_water_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_water_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_water_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t x_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2]){
     
     glm::ivec3 rightNeightbour = chunkCoord + neighbourChunks[0];
     auto it = chunkMap.find(rightNeightbour);
@@ -419,7 +424,8 @@ void World::populateChunkBitMaskPadding(Chunk& chunk, glm::ivec3 chunkCoord, u_i
             for(int z=0; z<CHUNK_SIZE; z++){
                 int t = it->second.blocks[0][y][z].type; 
                 if (t != 0) x_solid_mask[y+1][z+1] |= (1ULL << (CHUNK_SIZE+1)); 
-                if (t != 0 && t != 8) x_opaque_mask[y+1][z+1] |= (1ULL << (CHUNK_SIZE+1));
+                if (t == 6) x_water_mask[y+1][z+1] |= (1ULL << (CHUNK_SIZE+1));
+                if (t != 0 && t != 8 && t != 6) x_opaque_mask[y+1][z+1] |= (1ULL << (CHUNK_SIZE+1));
             }
         }
     }   
@@ -431,7 +437,8 @@ void World::populateChunkBitMaskPadding(Chunk& chunk, glm::ivec3 chunkCoord, u_i
             for(int z=0; z<CHUNK_SIZE; z++){
                 int t = it->second.blocks[CHUNK_SIZE-1][y][z].type; 
                 if (t != 0) x_solid_mask[y+1][z+1] |= (1ULL << 0);
-                if (t != 0 && t != 8) x_opaque_mask[y+1][z+1] |= (1ULL << 0);
+                if (t == 6) x_water_mask[y+1][z+1] |= (1ULL << 0);
+                if (t != 0 && t != 8 && t != 6) x_opaque_mask[y+1][z+1] |= (1ULL << 0);
             }
         }
     }
@@ -443,7 +450,8 @@ void World::populateChunkBitMaskPadding(Chunk& chunk, glm::ivec3 chunkCoord, u_i
             for(int z=0; z<CHUNK_SIZE; z++){
                 int t = it->second.blocks[x][0][z].type; 
                 if (t != 0) y_solid_mask[x+1][z+1] |= (1ULL << (CHUNK_SIZE+1)); 
-                if (t != 0 && t != 8) y_opaque_mask[x+1][z+1] |= (1ULL << (CHUNK_SIZE+1));
+                if (t == 6) y_water_mask[x+1][z+1] |= (1ULL << (CHUNK_SIZE+1));
+                if (t != 0 && t != 8 && t != 6) y_opaque_mask[x+1][z+1] |= (1ULL << (CHUNK_SIZE+1));
             }
         }
     }
@@ -455,7 +463,8 @@ void World::populateChunkBitMaskPadding(Chunk& chunk, glm::ivec3 chunkCoord, u_i
             for(int z=0; z<CHUNK_SIZE; z++){
                 int t = it->second.blocks[x][CHUNK_SIZE-1][z].type; 
                 if (t != 0) y_solid_mask[x+1][z+1] |= (1ULL << 0); 
-                if (t != 0 && t != 8) y_opaque_mask[x+1][z+1] |= (1ULL << 0);
+                if (t == 6) y_water_mask[x+1][z+1] |= (1ULL << 0);
+                if (t != 0 && t != 8 && t != 6) y_opaque_mask[x+1][z+1] |= (1ULL << 0);
             }
         }
     }
@@ -467,7 +476,8 @@ void World::populateChunkBitMaskPadding(Chunk& chunk, glm::ivec3 chunkCoord, u_i
             for(int y=0; y<CHUNK_SIZE; y++){
                 int t = it->second.blocks[x][y][0].type; 
                 if (t != 0) z_solid_mask[x+1][y+1] |= (1ULL << (CHUNK_SIZE+1)); 
-                if (t != 0 && t != 8) z_opaque_mask[x+1][y+1] |= (1ULL << (CHUNK_SIZE+1));
+                if (t == 6) z_water_mask[x+1][y+1] |= (1ULL << (CHUNK_SIZE+1));
+                if (t != 0 && t != 8 && t != 6) z_opaque_mask[x+1][y+1] |= (1ULL << (CHUNK_SIZE+1));
             }
         }
     }
@@ -479,13 +489,14 @@ void World::populateChunkBitMaskPadding(Chunk& chunk, glm::ivec3 chunkCoord, u_i
             for(int y=0; y<CHUNK_SIZE; y++){
                 int t = it->second.blocks[x][y][CHUNK_SIZE-1].type; 
                 if (t != 0) z_solid_mask[x+1][y+1] |= (1ULL << 0); 
-                if (t != 0 && t != 8) z_opaque_mask[x+1][y+1] |= (1ULL << 0);
+                if (t == 6) z_water_mask[x+1][y+1] |= (1ULL << 0);
+                if (t != 0 && t != 8 && t != 6) z_opaque_mask[x+1][y+1] |= (1ULL << 0);
             }
         }
     }
 }
 
-void World::bitMaskFaceCulling(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t x_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], std::vector<float>& meshData){
+void World::bitMaskFaceCulling(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t x_water_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_water_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_water_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t x_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t y_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], u_int64_t z_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2], std::vector<float>& meshData){
     
     u_int64_t FILTER = ((1ULL << CHUNK_SIZE) - 1) << 1; // Mask to ignore the padding bits (0 and CHUNK_SIZE+1)
     
@@ -496,8 +507,9 @@ void World::bitMaskFaceCulling(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_
             // take a 64-bit row from the bitmask
             uint64_t row = x_solid_mask[y][z];
             uint64_t opq = x_opaque_mask[y][z];
-            uint64_t rightVisible = (row & ~(opq >> 1)) & FILTER;
-            uint64_t leftVisible  = (row & ~(opq << 1)) & FILTER;
+            uint64_t wat = x_water_mask[y][z];
+            uint64_t rightVisible = (row & ~(opq >> 1)) & ~(wat & (wat >> 1)) & FILTER;
+            uint64_t leftVisible  = (row & ~(opq << 1)) & ~(wat & (wat << 1)) & FILTER;
 
             // iterate and add the visible faces to the mesh data
             while(rightVisible){
@@ -582,8 +594,9 @@ void World::bitMaskFaceCulling(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_
         for(int z=1; z<CHUNK_SIZE+1; z++){
             uint64_t row = y_solid_mask[x][z];
             uint64_t opq = y_opaque_mask[x][z];
-            uint64_t topVisible = (row & ~(opq >> 1)) & FILTER;
-            uint64_t bottomVisible = (row & ~(opq << 1)) & FILTER;
+            uint64_t wat = y_water_mask[x][z];
+            uint64_t topVisible = (row & ~(opq >> 1)) & ~(wat & (wat >> 1)) & FILTER;
+            uint64_t bottomVisible = (row & ~(opq << 1)) & ~(wat & (wat << 1)) & FILTER;
 
 
             while(topVisible){
@@ -675,8 +688,9 @@ void World::bitMaskFaceCulling(Chunk& chunk, glm::ivec3 chunkCoord, u_int64_t x_
         for(int y=1; y<CHUNK_SIZE+1; y++){
             uint64_t row = z_solid_mask[x][y];
             uint64_t opq = z_opaque_mask[x][y];
-            uint64_t backVisible = (row & ~(opq >> 1)) & FILTER;
-            uint64_t frontVisible = (row & ~(opq << 1)) & FILTER;
+            uint64_t wat = z_water_mask[x][y];
+            uint64_t backVisible = (row & ~(opq >> 1)) & ~(wat & (wat >> 1)) & FILTER;
+            uint64_t frontVisible = (row & ~(opq << 1)) & ~(wat & (wat << 1)) & FILTER;
 
             while(backVisible){
                 int bit_index = __builtin_ctzll(backVisible);
@@ -784,19 +798,22 @@ void World::calculateChunkMesh(glm::ivec3 chunkCoord) {
         u_int64_t x_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2] = {0}; // +2 for the padding
         u_int64_t y_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2] = {0};
         u_int64_t z_solid_mask[CHUNK_SIZE+2][CHUNK_SIZE+2] = {0};
+        u_int64_t x_water_mask[CHUNK_SIZE+2][CHUNK_SIZE+2] = {0};
+        u_int64_t y_water_mask[CHUNK_SIZE+2][CHUNK_SIZE+2] = {0};
+        u_int64_t z_water_mask[CHUNK_SIZE+2][CHUNK_SIZE+2] = {0};
         u_int64_t x_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2] = {0};
         u_int64_t y_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2] = {0};
         u_int64_t z_opaque_mask[CHUNK_SIZE+2][CHUNK_SIZE+2] = {0};
 
 
         // populate the bitmask arrays with current chunk data
-        populateChunkBitMask(chunk, chunkCoord, x_solid_mask, y_solid_mask, z_solid_mask, x_opaque_mask, y_opaque_mask, z_opaque_mask);
+        populateChunkBitMask(chunk, chunkCoord, x_solid_mask, y_solid_mask, z_solid_mask, x_water_mask, y_water_mask, z_water_mask, x_opaque_mask, y_opaque_mask, z_opaque_mask);
 
         // populate the bitmask padding with neighbor chunk data to allow proper face culling at chunk borders
-        populateChunkBitMaskPadding(chunk, chunkCoord, x_solid_mask, y_solid_mask, z_solid_mask, x_opaque_mask, y_opaque_mask, z_opaque_mask);
+        populateChunkBitMaskPadding(chunk, chunkCoord, x_solid_mask, y_solid_mask, z_solid_mask, x_water_mask, y_water_mask, z_water_mask, x_opaque_mask, y_opaque_mask, z_opaque_mask);
 
         // use the bitmask arrays to determine which faces of each block are visible and should be included in the mesh
-        bitMaskFaceCulling(chunk, chunkCoord, x_solid_mask, y_solid_mask, z_solid_mask, x_opaque_mask, y_opaque_mask, z_opaque_mask, meshData);
+        bitMaskFaceCulling(chunk, chunkCoord, x_solid_mask, y_solid_mask, z_solid_mask, x_water_mask, y_water_mask, z_water_mask, x_opaque_mask, y_opaque_mask, z_opaque_mask, meshData);
 
         chunk.state = CHUNK_STATE::MESHED; // mark chunk as meshed
     }

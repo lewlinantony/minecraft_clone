@@ -30,7 +30,7 @@ glm::vec3 Collision::resolveYCollision(glm::vec3 nextPlayerPos, glm::vec3 yMovem
         for (int y = min_y; y < max_y; y++) {
             for (int z = min_z; z < max_z; z++) {
                 Block* block = world.getBlock(glm::ivec3(x, y, z));
-                if (block && block->type != 0) {
+                if (block && block->type != 0 && block->type != 6) {
                     BoundingBox blockBox = BoundingBox::box(
                         glm::vec3(x, y, z),
                         BLOCK_SIZE,
@@ -78,7 +78,7 @@ glm::vec3 Collision::resolveXZCollision(glm::vec3 nextPlayerPos, glm::vec3 xzMov
         for (int x = min_x; x < max_x; x++) {
             for (int y = min_y; y < max_y; y++) {
                 for (int z = min_z; z < max_z; z++) {
-                    if (world.getBlock({x, y, z}) && world.getBlock({x, y, z})->type != 0) {
+                    if (world.getBlock({x, y, z}) && world.getBlock({x, y, z})->type != 0 && world.getBlock({x, y, z})->type != 6) {
                         BoundingBox blockBox = BoundingBox::box(
                             glm::vec3(x, y, z),
                             BLOCK_SIZE + 2.0f * collisionGap,
@@ -119,7 +119,7 @@ resolve_z:
         for (int x = min_x; x < max_x; x++) {
             for (int y = min_y; y < max_y; y++) {
                 for (int z = min_z; z < max_z; z++) {
-                    if (world.getBlock({x, y, z}) && world.getBlock({x, y, z})->type != 0) {
+                    if (world.getBlock({x, y, z}) && world.getBlock({x, y, z})->type != 0 && world.getBlock({x, y, z})->type != 6) {
                         BoundingBox blockBox = BoundingBox::box(
                             glm::vec3(x, y, z),
                             BLOCK_SIZE,
