@@ -142,7 +142,7 @@ void World::generateChunkData(glm::ivec3 chunkOrigin) {
             int tz = cz * 6 + ((h >> 8) % 4) + 1;
             
             if (globalNX == tx && globalNZ == tz) {
-                if (((h >> 16) % 100) < 40) { // 40% chance of a tree in this cell
+                if (((h >> 16) % 100) < 10) { // 10% chance of a tree in this cell
                     float nx_f = (float)globalNX;
                     float nz_f = (float)globalNZ;
                     

@@ -15,7 +15,7 @@ struct Player {
     // Properties
     const float width = 0.6f;
     const float depth = 0.6f;
-    const float height = 1.8f;
+    const float height = 2.8f;
     const float eyeHeight = 1.6f;
 
     // Physics Constants
